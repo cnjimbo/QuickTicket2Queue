@@ -1,0 +1,41 @@
+{
+  "include": [],
+  "compilerOptions": {
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    // "skipLibCheck": true,
+    "baseUrl": "./",
+    "outDir": "./dist/",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@render/*": [
+        "src/render/*"
+      ],
+      "@main/*": [
+        "src/main/*"
+      ]
+    },
+  },
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    },
+    {
+      "path": "./tsconfig.web.json"
+    }
+  ],
+  "exclude": [
+    "**/dist",
+    "**/build",
+    ".vscode",
+    "**/.git",
+    "**/build",
+    "cache",
+    "**/.vite/",
+    "**/node_modules"
+  ],
+}

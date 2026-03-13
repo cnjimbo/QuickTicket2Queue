@@ -1,0 +1,30 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": [
+    "**/*.d.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "**/*.ts",
+    "**/*.mts",
+  ],
+  "compilerOptions": {
+    "baseUrl": "./",
+    "composite": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@render/*": [
+        "src/render/*"
+      ],
+      "@main/*": [
+        "src/main/*"
+      ]
+    },
+  },
+  "exclude": [
+    "./src/render",
+  ],
+}

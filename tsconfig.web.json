@@ -1,0 +1,54 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": [
+    // "src/preload/**/*", //不能包含preload中的代码
+    // "**/*.ts",
+    "./**/*.d.ts",
+    "./src/render/**/*",
+    "vite.config.mts",
+  ],
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ESNext",
+    "types": [
+      "vite/client",
+      "vue-router/volar/sfc-route-blocks",
+      "vue-router/volar/sfc-typed-router",
+    ],
+    "composite": true,
+    "baseUrl": "./",
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "outDir": "./dist/",
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@render/*": [
+        "src/render/*"
+      ],
+      "@main/*": [
+        "src/main/*"
+      ]
+    },
+  },
+  "vueCompilerOptions": {
+    "plugins": [
+      "vue-router/volar/sfc-typed-router",
+      "vue-router/volar/sfc-route-blocks",
+    ],
+  },
+  "exclude": [
+    "./src/main/",
+    "**/dist",
+    "**/build",
+    ".vscode",
+    "**/.git",
+    "**/build",
+    "cache",
+    "**/.vite/",
+    "**/node_modules"
+  ],
+}

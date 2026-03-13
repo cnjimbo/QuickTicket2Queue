@@ -1,49 +1,25 @@
-.Trash/
-.trash/
-.DS_Store
-
-# IDE related
-
-.idea
-
-# Obsidian
-
-**/.obsidian/*
-!**/.obsidian/workspace*
-!**/.obsidian/graph*
-!**/.obsidian/snippets/
-
-# Temporary files
-
-.temp
-
-# Nuxt
-
-.nuxt
-
-# Node.js
-
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+/build
 node_modules
-.npmrc
-
-# VitePress
-
-**/.vitepress/dist
-**/.vitepress/docsMetadata.json
-**/.vitepress/cache/
-
-# Netlify
-
-.netlify/functions-serve/*
-
-# Generated files
-
-components.d.ts
-
-# Local env files
-
+dist
+dist-ssr
 *.local
 
-# Logs
-
-*.log
+# Editor directories and files
+# .vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+asar-list.txt

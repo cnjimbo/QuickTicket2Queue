@@ -1,8 +1,0 @@
-{
-  "devDependencies": {},
-  "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview"
-  }
-}
