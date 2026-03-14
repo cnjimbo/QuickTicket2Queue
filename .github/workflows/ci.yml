@@ -61,50 +61,20 @@ jobs:
 
       - name: Detect version increase
         id: version_check
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          PREVIOUS_VERSION=""
+          TAG_NAME="v$CURRENT_VERSION"
 
-          if [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            PREVIOUS_VERSION=$(git show "$BEFORE_SHA:package.json" 2>/dev/null | node -e "
-              const fs = require('node:fs');
-              const raw = fs.readFileSync(0, 'utf8');
-              if (!raw.trim()) process.exit(0);
-              const pkg = JSON.parse(raw);
-              process.stdout.write(pkg.version || '');
-            ")
+          git fetch --tags
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            SHOULD_TAG="false"
+          else
+            SHOULD_TAG="true"
           fi
 
-          SHOULD_TAG=$(node -e "
-            const current = process.argv[1] || '';
-            const previous = process.argv[2] || '';
-            if (!current || !previous) {
-              process.stdout.write('false');
-              process.exit(0);
-            }
-
-            const parse = (v) => {
-              const m = v.match(/^(\\d+)\\.(\\d+)\\.(\\d+)/);
-              return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
-            };
-
-            const c = parse(current);
-            const p = parse(previous);
-            if (!c || !p) {
-              process.stdout.write('false');
-              process.exit(0);
-            }
-
-            const increased = c[0] > p[0] || (c[0] === p[0] && (c[1] > p[1] || (c[1] === p[1] && c[2] > p[2])));
-            process.stdout.write(increased ? 'true' : 'false');
-          " "$CURRENT_VERSION" "$PREVIOUS_VERSION")
-
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
-          echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
           echo "should_tag=$SHOULD_TAG" >> "$GITHUB_OUTPUT"
-          echo "tag_name=v$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         id: create_tag
