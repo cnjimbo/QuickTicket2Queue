@@ -86,5 +86,5 @@ jobs:
         env:
           ELECTRON_BUILDER_PUBLISH: always
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run build:ia32
+        run: pnpm run build:ia32
         shell: bash

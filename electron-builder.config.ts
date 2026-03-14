@@ -68,6 +68,7 @@ const config: Configuration = {
   win: {
     target: ["portable"],
     executableName: "quickticket2queue",
+    artifactName: "quickticket2queue-${version}-${arch}.${ext}",
     signAndEditExecutable: !shouldDisableWindowsSigning,
     icon: "assets/icons/icon-512.png",
   },
