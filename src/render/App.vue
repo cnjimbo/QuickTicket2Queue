@@ -1,8 +1,93 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
+const showDevAddressBar = import.meta.env.DEV
+const devUrlInput = ref('')
+let stopRouteSync: (() => void) | undefined
+
+function syncDevUrlInput() {
+  devUrlInput.value = window.location.href
+}
+
+function focusDevUrlInput() {
+  const input = document.getElementById('dev-url-input') as HTMLInputElement | null
+  if (!input) return
+
+  input.focus()
+  input.select()
+}
+
+function getNavigableUrl(rawValue: string): URL {
+  const value = rawValue.trim()
+  return new URL(value, window.location.origin)
+}
+
+function navigateByDevUrlInput() {
+  const rawValue = devUrlInput.value.trim()
+  if (!rawValue) return
+
+  try {
+    const url = getNavigableUrl(rawValue)
+    if (url.origin !== window.location.origin) {
+      window.location.assign(url.href)
+      return
+    }
+
+    const targetPath = `${url.pathname}${url.search}${url.hash}`
+    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+
+    if (targetPath === currentPath) {
+      window.location.reload()
+      return
+    }
+
+    router.push(targetPath)
+  } catch {
+    const fallbackPath = rawValue.startsWith('/') ? rawValue : `/${rawValue}`
+    router.push(fallbackPath)
+  }
+}
+
+function goBack() {
+  window.history.back()
+}
+
+function goForward() {
+  window.history.forward()
+}
+
+function reloadPage() {
+  window.location.reload()
+}
+
+function handleGlobalKeydown(event: KeyboardEvent) {
+  if (!showDevAddressBar) return
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
+    event.preventDefault()
+    focusDevUrlInput()
+  }
+}
+
+onMounted(() => {
+  if (!showDevAddressBar) return
+
+  syncDevUrlInput()
+  stopRouteSync = router.afterEach(() => {
+    syncDevUrlInput()
+  })
+  window.addEventListener('popstate', syncDevUrlInput)
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  stopRouteSync?.()
+  window.removeEventListener('popstate', syncDevUrlInput)
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
 
 
 
@@ -20,33 +105,44 @@ const navLinks = computed(() => {
 </script>
 
 <template>
-<div class="app-shell">
-  <aside class="nav-panel">
-    <div class="nav-brand">
-      <p class="eyebrow">Quick Ticket to Queue</p>
-      <h1>工单控制台</h1>
-      <p class="nav-subtitle">常用队列、凭据配置与工单提交入口</p>
-    </div>
-    <nav class="nav-links">
-      <RouterLink v-for="link in navLinks" :key="link.to" :to="link.to" class="nav-link"
-        :class="{ 'is-active': route.path.startsWith(link.to) }">
-        <span class="nav-link__label">{{ link.meta.label }}</span>
-        <span class="nav-link__desc">{{ link.meta.description }}</span>
-      </RouterLink>
-    </nav>
-  </aside>
+<div class="app-root">
+  <div v-if="showDevAddressBar" class="dev-urlbar">
+    <button type="button" class="dev-urlbar__btn" @click="goBack">Back</button>
+    <button type="button" class="dev-urlbar__btn" @click="goForward">Forward</button>
+    <button type="button" class="dev-urlbar__btn" @click="reloadPage">Reload</button>
+    <input id="dev-url-input" v-model="devUrlInput" class="dev-urlbar__input" type="text" spellcheck="false"
+      autocomplete="off" @keydown.enter="navigateByDevUrlInput">
+    <button type="button" class="dev-urlbar__btn is-primary" @click="navigateByDevUrlInput">Go</button>
+  </div>
 
-  <section class="display-panel">
-    <div class="display-body">
-      <RouterView v-slot="{ Component }">
-        <component v-if="Component" :is="Component" class="display-component" />
-        <div v-else class="empty-state">
-          <h3>欢迎使用 Quick Ticket to Queue</h3>
-          <p>请选择左侧功能开始提交工单或维护配置。</p>
-        </div>
-      </RouterView>
-    </div>
-  </section>
+  <div class="app-shell" :class="{ 'with-dev-urlbar': showDevAddressBar }">
+    <aside class="nav-panel">
+      <div class="nav-brand">
+        <p class="eyebrow">Quick Ticket to Queue</p>
+        <h1>工单控制台</h1>
+        <p class="nav-subtitle">常用队列、凭据配置与工单提交入口</p>
+      </div>
+      <nav class="nav-links">
+        <RouterLink v-for="link in navLinks" :key="link.to" :to="link.to" class="nav-link"
+          :class="{ 'is-active': route.path.startsWith(link.to) }">
+          <span class="nav-link__label">{{ link.meta.label }}</span>
+          <span class="nav-link__desc">{{ link.meta.description }}</span>
+        </RouterLink>
+      </nav>
+    </aside>
+
+    <section class="display-panel">
+      <div class="display-body">
+        <RouterView v-slot="{ Component }">
+          <component v-if="Component" :is="Component" class="display-component" />
+          <div v-else class="empty-state">
+            <h3>欢迎使用 Quick Ticket to Queue</h3>
+            <p>请选择左侧功能开始提交工单或维护配置。</p>
+          </div>
+        </RouterView>
+      </div>
+    </section>
+  </div>
 </div>
 </template>
 
@@ -57,11 +153,64 @@ const navLinks = computed(() => {
   color: #e2e8f0;
 }
 
+.app-root {
+  height: 98vh;
+  width: 99vw;
+  overflow: hidden;
+}
+
+.dev-urlbar {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1f2937;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.dev-urlbar__btn {
+  height: 34px;
+  min-width: 68px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  background: #111827;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.dev-urlbar__btn.is-primary {
+  background: #0284c7;
+  border-color: #38bdf8;
+}
+
+.dev-urlbar__input {
+  flex: 1;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  background: #0b1220;
+  color: #f8fafc;
+  padding: 0 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.dev-urlbar__input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 280px 1fr;
   height: 98vh;
   width: 99vw;
+}
+
+.app-shell.with-dev-urlbar {
+  height: calc(100vh - 50px);
 }
 
 .nav-panel {
@@ -180,6 +329,19 @@ const navLinks = computed(() => {
 }
 
 @media (max-width: 960px) {
+  .dev-urlbar {
+    height: auto;
+    flex-wrap: wrap;
+  }
+
+  .dev-urlbar__btn {
+    min-width: 60px;
+  }
+
+  .dev-urlbar__input {
+    min-width: 240px;
+  }
+
   .app-shell {
     grid-template-columns: 1fr;
   }
