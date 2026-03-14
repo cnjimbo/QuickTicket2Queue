@@ -1,7 +1,7 @@
 {
   "name": "quickticket2queue",
   "productName": "Quick Ticket to Queue",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "packageManager": "pnpm@10.29.3",
   "description": "Desktop app for quickly submitting ServiceNow tickets to common queues",
   "author": "cnjimbo",
@@ -92,5 +92,8 @@
     "ignoredBuiltDependencies": [
       "@swc/core"
     ]
+  },
+  "volta": {
+    "node": "24.14.0"
   }
 }
