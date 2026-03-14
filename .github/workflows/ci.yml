@@ -6,7 +6,6 @@ on:
       - main
     tags:
       - "v*"
-
   pull_request:
     branches:
       - main
@@ -15,41 +14,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ${{ matrix.os }}
-
-    timeout-minutes: 40
-
-    strategy:
-      matrix:
-        node_version: [24.x]
-        os: [ubuntu-latest, windows-latest, macos-latest]
-      fail-fast: false
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4.4.0
-
-      - name: Set node version to ${{ matrix.node_version }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node_version }}
-          cache: pnpm
-
-      - name: Install
-        run: pnpm i
-
-      - name: Build
-        env:
-          ELECTRON_BUILDER_PUBLISH: never
-        run: pnpm run build
-
   auto_tag_release:
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -78,7 +44,7 @@ jobs:
 
       - name: Create and push tag
         id: create_tag
-        if: steps.version_check.outputs.should_tag == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version_check.outputs.should_tag == 'true'
         env:
           TAG_NAME: ${{ steps.version_check.outputs.tag_name }}
         run: |
@@ -95,13 +61,20 @@ jobs:
           echo "created=true" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
-        if: steps.create_tag.outputs.created == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.create_tag.outputs.created == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version_check.outputs.tag_name }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report auto tag decision
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "current_version=${{ steps.version_check.outputs.current_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "tag_name=${{ steps.version_check.outputs.tag_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "should_tag=${{ steps.version_check.outputs.should_tag }}" >> "$GITHUB_STEP_SUMMARY"
 
   release:
     runs-on: ${{ matrix.os }}
