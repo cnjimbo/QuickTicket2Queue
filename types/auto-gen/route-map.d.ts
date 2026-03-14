@@ -33,6 +33,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/help/help': RouteRecordInfo<
+      '/help/help',
+      '/help/help',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/settings/credentials': RouteRecordInfo<
       '/settings/credentials',
       '/settings/credentials',
@@ -77,6 +84,12 @@ declare module 'vue-router/auto-routes' {
     'src/render/views/index.vue': {
       routes:
         | '/'
+      views:
+        | never
+    }
+    'src/render/views/help/help.vue': {
+      routes:
+        | '/help/help'
       views:
         | never
     }
