@@ -54,9 +54,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - os: windows-latest
-            build-ia32: true
       fail-fast: false
     permissions: write-all
 
@@ -80,11 +77,3 @@ jobs:
           ELECTRON_BUILDER_PUBLISH: always
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm run build
-
-      - name: Build ia32 (Windows only)
-        if: ${{ matrix.build-ia32 == true }}
-        env:
-          ELECTRON_BUILDER_PUBLISH: always
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run build:ia32
-        shell: bash
