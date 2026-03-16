@@ -2,9 +2,9 @@ import { IpcHandle } from "@doubleshot/nest-electron";
 import { Controller } from "@nestjs/common";
 import { Payload } from "@nestjs/microservices";
 import type {
+  TicketHistoryItem,
   TicketQueueOption,
   TicketResponse,
-  TicketResult,
   TicketType,
 } from "@/types/orm_types";
 import { AppServiceTicket } from "./app.service.ticket";
@@ -33,7 +33,7 @@ export class AppControllerTicket {
   }
 
   @IpcHandle("get-ticket-history")
-  public async getTicketHistory(): Promise<TicketResult[]> {
+  public async getTicketHistory(): Promise<TicketHistoryItem[]> {
     return await this.store.getTicketHistory();
   }
 
@@ -43,7 +43,7 @@ export class AppControllerTicket {
   }
 
   @IpcHandle("save-ticket-history")
-  public async saveTicketHistory(item: TicketResult): Promise<void> {
+  public async saveTicketHistory(item: TicketHistoryItem): Promise<void> {
     await this.store.saveTicketHistory(item);
   }
 

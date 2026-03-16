@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { CredentialItem, TicketResult, TicketQueueOption } from "@/types/orm_types";
+import { CredentialItem, TicketHistoryItem, TicketQueueOption } from "@/types/orm_types";
 import { AppServiceCredential } from "./app.service.credential";
 import { AppServiceTicketHistory } from "./app.service.ticket-history";
 import { AppServiceTicketOptions, TicketOptionsSyncMode } from "./app.service.ticket-options";
@@ -30,11 +30,11 @@ export class AppServiceStore {
   }
 
   // Ticket History methods
-  public async saveTicketHistory(item: TicketResult): Promise<void> {
+  public async saveTicketHistory(item: TicketHistoryItem): Promise<void> {
     return this.ticketHistoryService.save(item);
   }
 
-  public async getTicketHistory(): Promise<TicketResult[]> {
+  public async getTicketHistory(): Promise<TicketHistoryItem[]> {
     return this.ticketHistoryService.get();
   }
 

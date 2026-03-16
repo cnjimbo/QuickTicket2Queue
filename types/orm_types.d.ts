@@ -29,6 +29,11 @@ export interface TicketResult {
   createTime?: string; // "2024-06-17 10:20:30"
 }
 
+export interface TicketHistoryItem {
+  result: TicketResult;
+  ticket: TicketType;
+}
+
 export interface TicketQueueOption {
   des: string;
   queue: string;

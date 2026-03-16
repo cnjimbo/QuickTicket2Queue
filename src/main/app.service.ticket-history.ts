@@ -1,10 +1,33 @@
 import { Injectable } from "@nestjs/common";
 import Store from "electron-store";
-import { TicketResult } from "@/types/orm_types";
+import { TicketHistoryItem, TicketResult } from "@/types/orm_types";
+
+function normalizeHistoryItem(item: unknown): TicketHistoryItem | null {
+    if (!item || typeof item !== "object") return null;
+
+    const candidate = item as Record<string, unknown>;
+    if (candidate.result && candidate.ticket) {
+        return candidate as unknown as TicketHistoryItem;
+    }
+
+    // Backward compatible: previous versions stored plain TicketResult entries.
+    const legacy = item as TicketResult;
+    if (!legacy.sys_id || !legacy.display_value) return null;
+
+    return {
+        result: legacy,
+        ticket: {
+            title: "",
+            content: "",
+            queue_val: "",
+            userName: "",
+        },
+    };
+}
 
 @Injectable()
 export class AppServiceTicketHistory {
-    private store!: Store<{ "ticketHistory": TicketResult[] }>;
+    private store!: Store<{ "ticketHistory": TicketHistoryItem[] }>;
 
     constructor() {
         this.initializeStore();
@@ -22,7 +45,7 @@ export class AppServiceTicketHistory {
         }
     }
 
-    public async save(item: TicketResult): Promise<void> {
+    public async save(item: TicketHistoryItem): Promise<void> {
         try {
 
             this.store.appendToArray("ticketHistory", item);
@@ -31,10 +54,18 @@ export class AppServiceTicketHistory {
         }
     }
 
-    public async get(): Promise<TicketResult[]> {
+    public async get(): Promise<TicketHistoryItem[]> {
         try {
-            const history = this.store.get("ticketHistory", [])
-            return history;
+            const history = this.store.get("ticketHistory", []);
+            const normalized = history
+                .map((item) => normalizeHistoryItem(item))
+                .filter((item): item is TicketHistoryItem => item !== null);
+
+            if (normalized.length !== history.length) {
+                this.store.set("ticketHistory", normalized);
+            }
+
+            return normalized;
         } catch (error) {
             console.error("Failed to read ticket history from store:", error);
             return [];

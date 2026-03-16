@@ -16,7 +16,7 @@
     </div>
   </div>
 
-  <el-table :data="histories" border stripe v-loading="loading" row-key="display_value" empty-text="暂无历史记录">
+  <el-table :data="histories" border stripe v-loading="loading" :row-key="getRowKey" empty-text="暂无历史记录">
     <el-table-column label="#" width="60">
       <template #default="{ $index }">
         {{ $index + 1 }}
@@ -29,10 +29,15 @@
     </el-table-column>
     <el-table-column label="单号" min-width="140" show-overflow-tooltip>
       <template #default="{ row }">
-        <el-link type="primary" @click.prevent="openRecord(row.ticket_link)">{{ row.display_value }}</el-link>
+        <el-link type="primary" @click.prevent="openRecord(row.result.ticket_link)">{{ row.result.display_value
+          }}</el-link>
       </template>
     </el-table-column>
-    <el-table-column prop="createTime" label="时间" min-width="140" />
+    <el-table-column label="时间" min-width="140">
+      <template #default="{ row }">
+        {{ row.result.createTime }}
+      </template>
+    </el-table-column>
 
 
   </el-table>
@@ -42,7 +47,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { TicketResult } from '@/types/orm_types';
+import { TicketHistoryItem } from '@/types/orm_types';
 
 definePage({
   meta: {
@@ -55,7 +60,7 @@ definePage({
   }
 })
 
-const getType = (ticket: TicketResult): "primary" | "success" | "info" | "warning" | "danger" => {
+const getType = (ticket: TicketHistoryItem): "primary" | "success" | "info" | "warning" | "danger" => {
 
   const txt = getTxt(ticket)
 
@@ -67,22 +72,26 @@ const getType = (ticket: TicketResult): "primary" | "success" | "info" | "warnin
     return 'warning'
   return 'warning'
 }
-const getTxt = (ticket: TicketResult): "pfetst" | "pfestg" | "pfeprod" => {
+const getTxt = (ticket: TicketHistoryItem): "pfetst" | "pfestg" | "pfeprod" => {
 
-  if (ticket.record_link?.includes("pfetst")) {
+  if (ticket.result.record_link?.includes("pfetst")) {
     return "pfetst"
   }
-  if (ticket.record_link?.includes("pfestg")) {
+  if (ticket.result.record_link?.includes("pfestg")) {
     return "pfestg"
   }
-  if (ticket.record_link?.includes("pfeprod")) {
+  if (ticket.result.record_link?.includes("pfeprod")) {
     return "pfeprod"
   }
   return 'pfetst'
 }
-const histories = ref<TicketResult[]>([])
+const histories = ref<TicketHistoryItem[]>([])
 const loading = ref(false)
 const clearDialogVisible = ref(false)
+
+const getRowKey = (row: TicketHistoryItem) => {
+  return `${row.result.sys_id}-${row.result.createTime ?? ''}`
+}
 
 const loadHistories = async () => {
   loading.value = true

@@ -86,7 +86,7 @@ export class AppServiceTicket {
       };
 
       return await axios(config)
-        .then((response) => {
+        .then(async (response) => {
           console.log(
             "🚀 ~ AppServiceTicket ~ submitTicket ~ response:",
             response.data,
@@ -96,7 +96,12 @@ export class AppServiceTicket {
             for (const result of res.result) {
               result.ticket_link = `${current.sn_host}/now/sow/record/incident/${result.sys_id}`;
               result.createTime = new Date().toLocaleString();
-              this.store.saveTicketHistory(result);
+              await this.store.saveTicketHistory({
+                result,
+                ticket: {
+                  ...userInput,
+                },
+              });
             }
           }
 
