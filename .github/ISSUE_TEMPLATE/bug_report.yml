@@ -111,7 +111,7 @@ body:
       placeholder: |
         例如：
         Error: [IPC] Failed to invoke 'ticket': Invalid response format
-        
+
         或者描述错误信息的内容
       rows: 5
 

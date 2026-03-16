@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 查看帮助文档
+    url: https://github.com/cnjimbo/QuickTicket2Queue#readme
+    about: 查看项目说明和使用指南
+  - name: 💬 讨论与反馈
+    url: https://github.com/cnjimbo/QuickTicket2Queue/discussions
+    about: 在 discussions 中参与讨论
