@@ -25,6 +25,11 @@
         }}</el-link>
       </template>
     </el-table-column>
+    <el-table-column label="订单标题" min-width="220" show-overflow-tooltip>
+      <template #default="{ row }">
+        {{ row.ticket.title || '-' }}
+      </template>
+    </el-table-column>
     <el-table-column label="时间" min-width="140">
       <template #default="{ row }">
         {{ row.result.createTime }}
