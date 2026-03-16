@@ -1,9 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import axios from "axios";
-import * as qs from "qs";
 
-import type { AxiosInstance, AxiosRequestConfig } from "axios";
-import {
+import type {
   ClientCredential,
   TicketResponse,
   TicketType,
@@ -21,59 +18,102 @@ function stringifyErrorPayload(payload: unknown): string {
   }
 }
 
-function formatAxiosFailure(
+interface HttpErrorDetails {
+  status?: number;
+  statusText?: string;
+  data?: unknown;
+}
+
+function formatHttpFailure(
   context: string,
   error: unknown,
+  details?: HttpErrorDetails,
   host?: string,
 ): string {
-  if (!axios.isAxiosError(error)) {
+  if (!details?.status) {
     return `${context}失败: ${error instanceof Error ? error.message : String(error)}`;
   }
 
-  const status = error.response?.status;
-  const statusText = error.response?.statusText ?? "";
-  const details = stringifyErrorPayload(error.response?.data);
+  const status = details.status;
+  const statusText = details.statusText ?? "";
+  const responseDetails = stringifyErrorPayload(details.data);
   const hostText = host ? ` (${host})` : "";
 
   if (status === 401) {
-    return `${context}失败: 401 Unauthorized${hostText}。请检查当前环境的 client_id/client_secret/sn_host 是否正确，并确认账号接口权限可用。${details ? ` 响应: ${details}` : ""}`;
+    return `${context}失败: 401 Unauthorized${hostText}。请检查当前环境的 client_id/client_secret/sn_host 是否正确，并确认账号接口权限可用。${responseDetails ? ` 响应: ${responseDetails}` : ""}`;
   }
 
   if (status === 403) {
-    return `${context}失败: 403 Forbidden${hostText}。当前账号缺少接口权限。${details ? ` 响应: ${details}` : ""}`;
+    return `${context}失败: 403 Forbidden${hostText}。当前账号缺少接口权限。${responseDetails ? ` 响应: ${responseDetails}` : ""}`;
   }
 
-  return `${context}失败: ${status ?? "unknown"} ${statusText}${hostText}${details ? `，响应: ${details}` : ""}`;
+  return `${context}失败: ${status ?? "unknown"} ${statusText}${hostText}${responseDetails ? `，响应: ${responseDetails}` : ""}`;
 }
+
+const REQUEST_TIMEOUT_MS = 60000;
 
 @Injectable()
 export class AppServiceTicket {
-  private readonly snClient: AxiosInstance;
-
   public constructor(
     private readonly appServiceOS: AppServiceOS,
     private readonly store: AppServiceStore,
-  ) {
-    this.snClient = axios.create({
-      timeout: 60000,
-      headers: {
-        Accept: "*/*",
-        Connection: "keep-alive",
-      },
-    });
+  ) { }
+
+  private async fetchWithTimeout<T>(
+    url: string,
+    options: RequestInit,
+    timeoutMs: number = REQUEST_TIMEOUT_MS,
+  ): Promise<{ data: T; status: number; statusText: string }> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+
+      const text = await response.text();
+      let data: T;
+      try {
+        data = text ? JSON.parse(text) as T : ({} as T);
+      } catch (e) {
+        throw new Error(`响应 JSON 解析失败: ${text.slice(0, 100)}`, {
+          cause: e,
+        });
+      }
+
+      return {
+        data,
+        status: response.status,
+        statusText: response.statusText,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private async requestWithFormattedError<T>(
     context: string,
-    config: AxiosRequestConfig,
+    url: string,
+    options: RequestInit,
     host?: string,
   ): Promise<T> {
     try {
-      const response = await this.snClient.request<T>(config);
+      const response = await this.fetchWithTimeout<T>(url, options);
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(formatHttpFailure(context, new Error(), {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data,
+        }, host));
+      }
       return response.data;
     } catch (error) {
       console.error(`${context} request failed`, error);
-      throw new Error(formatAxiosFailure(context, error, host), {
+      throw new Error(formatHttpFailure(context, error, {
+        status: error instanceof Error && error.message.includes("Abort") ? 408 : undefined,
+      }, host), {
         cause: error,
       });
     }
@@ -85,24 +125,27 @@ export class AppServiceTicket {
   }
   public async getToken() {
     const current = await this.getCurrent();
-    const data = qs.stringify({
-      grant_type: "client_credentials",
-      client_secret: current.client_secret,
-      client_id: current.client_id,
-    });
-    const config = {
-      method: "post",
-      url: `${current.sn_host}/oauth_token.do`,
+    const params = new URLSearchParams();
+    params.set("grant_type", "client_credentials");
+    params.set("client_secret", current.client_secret ?? "");
+    params.set("client_id", current.client_id ?? "");
+    const body = params.toString();
+    const url = `${current.sn_host}/oauth_token.do`;
+    const options: RequestInit = {
+      method: "POST",
       headers: {
         "User-Agent": "Apifox/1.0.0 (https://apifox.com)",
         "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "*/*",
+        Connection: "keep-alive",
       },
-      data: data,
-    } satisfies AxiosRequestConfig;
+      body,
+    };
 
     const token = await this.requestWithFormattedError<ClientCredential>(
       "获取 OAuth Token",
-      config,
+      url,
+      options,
       current.sn_host,
     );
     console.log(JSON.stringify(token));
@@ -112,7 +155,7 @@ export class AppServiceTicket {
   public async submitTicket(userInput: TicketType) {
     console.log("🚀 ~ AppServiceTicket ~ submitTicket ~ userInput:", userInput);
     const client_credentials = await this.getToken();
-    const data = {
+    const payload = {
       u_caller_id: this.appServiceOS.getUserName(),
       u_pfe_requested_by: userInput.userName,
       u_short_description: userInput.title,
@@ -126,21 +169,23 @@ export class AppServiceTicket {
       u_correlation_display: "",
       u_use_ci_alert_assignment: 1,
     };
-    // console.log("🚀 ~ AppServiceTicket ~ submitTicket ~ data:", data);
     const current = await this.getCurrent();
-    const config = {
-      method: "post",
-      url: `${current.sn_host}/api/now/import/u_create_incident_inbound`,
+    const url = `${current.sn_host}/api/now/import/u_create_incident_inbound`;
+    const options: RequestInit = {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${client_credentials.access_token}`,
+        Accept: "*/*",
+        Connection: "keep-alive",
       },
-      data: data,
-    } satisfies AxiosRequestConfig;
+      body: JSON.stringify(payload),
+    };
 
     const res = await this.requestWithFormattedError<TicketResponse>(
       "提交工单",
-      config,
+      url,
+      options,
       current.sn_host,
     );
     console.log(
