@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { useStorage } from "@vueuse/core";
+import { useAsyncState, useStorage } from "@vueuse/core";
 import { TicketResponse, TicketType } from "@/types/orm_types";
 import { computed, reactive, ref, toRaw } from "vue";
 
@@ -42,7 +42,6 @@ export const useTicketStore = defineStore("ticket", () => {
     createEmptyValidationMessages(),
   );
   const result = ref<TicketResponse>();
-  const isSubmitting = ref(false);
   const suppressDraftPersistence = ref(false);
   const historyCopyPayload = ref<Partial<TicketType> | null>(null);
   const draftBaselineSnapshot = ref(JSON.stringify(createEmptyDraft()));
@@ -50,6 +49,11 @@ export const useTicketStore = defineStore("ticket", () => {
     TICKET_DRAFT_STORAGE_KEY,
     createEmptyDraft(),
     localStorage,
+  );
+  const { execute: executeSubmitTicket, isLoading: isSubmitting } = useAsyncState(
+    (payload: TicketType) => window.electron.ticket(payload),
+    undefined as TicketResponse | undefined,
+    { immediate: false, resetOnExecute: false },
   );
 
   const isFormValid = computed(() =>
@@ -158,21 +162,16 @@ export const useTicketStore = defineStore("ticket", () => {
     }
 
     try {
-      isSubmitting.value = true;
-      // console.log("🚀 ~ submitTicket ~ isSubmitting:", isSubmitting.value);
       setResult();
       const payload = toRaw(ticket);
       saveTicketDraft();
 
-      // console.log("Submitting ticket:", payload, "Queue:", payload.queue_val);
-      const res = await window.electron.ticket(payload); //typedInvoke(ipcChannels.ticket, payload)
+      const res = await executeSubmitTicket(0, payload);
       setResult(res);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "提交失败，请稍后重试";
       return message;
-    } finally {
-      isSubmitting.value = false;
     }
 
     return undefined;

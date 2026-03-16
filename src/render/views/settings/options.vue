@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { useTimeoutFn } from '@vueuse/core'
+import { useAsyncState, useTimeoutFn } from '@vueuse/core'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { TicketQueueOption } from '@/types/orm_types'
@@ -68,12 +68,32 @@ definePage({
     }
 })
 
-const options = ref<TicketQueueOption[]>([])
-const loading = ref(false)
-const adding = ref(false)
-const syncing = ref(false)
-const resetting = ref(false)
 const router = useRouter()
+const { state: options, isLoading: loading, execute: executeLoadOptions } = useAsyncState(
+    () => window.electron.getTicketOptions(),
+    [] as TicketQueueOption[],
+    { immediate: false, resetOnExecute: false },
+)
+const { isLoading: adding, execute: executeAddOption } = useAsyncState(
+    ({ des, queue }: { des: string, queue: string }) => window.electron.addTicketOption({ des, queue }),
+    undefined,
+    { immediate: false, resetOnExecute: false },
+)
+const { isLoading: syncing, execute: executeSyncOptions } = useAsyncState(
+    (mode: SyncMode) => window.electron.syncTicketOptionsFromGithub(mode),
+    undefined,
+    { immediate: false, resetOnExecute: false },
+)
+const { isLoading: resetting, execute: executeResetOptions } = useAsyncState(
+    () => window.electron.resetTicketOptions(),
+    undefined,
+    { immediate: false, resetOnExecute: false },
+)
+const { execute: executeDeleteOption } = useAsyncState(
+    (queue: string) => window.electron.deleteTicketOption(queue),
+    undefined,
+    { immediate: false, resetOnExecute: false },
+)
 
 const newOption = reactive<TicketQueueOption>({
     des: '',
@@ -94,12 +114,7 @@ function showNotice(type: 'success' | 'error', text: string) {
 }
 
 const loadOptions = async () => {
-    loading.value = true
-    try {
-        options.value = await window.electron.getTicketOptions()
-    } finally {
-        loading.value = false
-    }
+    await executeLoadOptions(0)
 }
 
 const handleAdd = async () => {
@@ -110,20 +125,15 @@ const handleAdd = async () => {
         return
     }
 
-    adding.value = true
-    try {
-        await window.electron.addTicketOption({ des, queue })
-        newOption.des = ''
-        newOption.queue = ''
-        await loadOptions()
-        showNotice('success', '新增成功')
-    } finally {
-        adding.value = false
-    }
+    await executeAddOption(0, { des, queue })
+    newOption.des = ''
+    newOption.queue = ''
+    await loadOptions()
+    showNotice('success', '新增成功')
 }
 
 const handleDelete = async (queue: string) => {
-    await window.electron.deleteTicketOption(queue)
+    await executeDeleteOption(0, queue)
     await loadOptions()
     showNotice('success', '删除成功')
 }
@@ -143,16 +153,13 @@ const handleReset = async () => {
         return
     }
 
-    resetting.value = true
     try {
-        await window.electron.resetTicketOptions()
+        await executeResetOptions(0)
         await loadOptions()
         showNotice('success', '已恢复默认列表')
     } catch (error) {
         const message = error instanceof Error ? error.message : '恢复默认失败，请稍后重试'
         showNotice('error', message)
-    } finally {
-        resetting.value = false
     }
 }
 
@@ -160,16 +167,13 @@ type SyncMode = 'merge' | 'overwrite'
 const GITHUB_TICKET_OPTIONS_EDIT_URL = 'https://github.dev/cnjimbo/QuickTicket2Queue/blob/main/config/ticket-options.default.json'
 
 const syncFromGithub = async (mode: SyncMode) => {
-    syncing.value = true
     try {
-        await window.electron.syncTicketOptionsFromGithub(mode)
+        await executeSyncOptions(0, mode)
         await loadOptions()
         showNotice('success', mode === 'overwrite' ? '已使用 GitHub 配置覆盖当前列表' : '已将 GitHub 配置合并到当前列表')
     } catch (error) {
         const message = error instanceof Error ? error.message : '同步失败，请稍后重试'
         showNotice('error', message)
-    } finally {
-        syncing.value = false
     }
 }
 

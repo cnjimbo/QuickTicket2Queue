@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useEventListener } from '@vueuse/core'
+import { useAsyncState, useEventListener } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -16,6 +16,11 @@ const skipBeforeUnloadPrompt = ref(false)
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
 let stopAppCloseSync: (() => void) | undefined
+const { execute: executeRespondToAppCloseRequest } = useAsyncState(
+  (shouldClose: boolean) => window.electron.respondToAppCloseRequest(shouldClose),
+  false,
+  { immediate: false, resetOnExecute: false },
+)
 
 const shouldPromptDraftSave = computed(() => hasUnsavedDraftChanges.value)
 
@@ -100,12 +105,12 @@ async function handleAppCloseRequested() {
     },
   })
   if (decision !== 'allow') {
-    await window.electron.respondToAppCloseRequest(false)
+    await executeRespondToAppCloseRequest(0, false)
     return
   }
 
   skipBeforeUnloadPrompt.value = true
-  await window.electron.respondToAppCloseRequest(true)
+  await executeRespondToAppCloseRequest(0, true)
 }
 
 onMounted(() => {

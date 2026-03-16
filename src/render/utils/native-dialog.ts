@@ -1,3 +1,5 @@
+import { useAsyncState } from '@vueuse/core'
+
 type NativeDialogOptions = {
     title: string
     message: string
@@ -21,7 +23,12 @@ export async function showNativeDialog(options: NativeDialogOptions): Promise<nu
         activeElement.blur()
     }
 
-    const response = await window.electron.showNativeDialog(options)
+    const { execute } = useAsyncState(
+        () => window.electron.showNativeDialog(options),
+        -1,
+        { immediate: false, resetOnExecute: false },
+    )
+    const response = await execute(0)
     await normalizeWindowFocusAfterDialog()
     return response
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTimeoutFn } from '@vueuse/core'
+import { useAsyncState, useTimeoutFn } from '@vueuse/core'
 import { computed, reactive, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
@@ -30,6 +30,18 @@ const current = reactive<CredentialItem>({
     env: 'pfetst',
 })
 const credentialReady = ref(true)
+const { execute: executeLoadTicketBootstrap } = useAsyncState(
+    async () => {
+        const [curr, userName, queueOptions] = await Promise.all([
+            window.electron.getCurrent(),
+            window.electron.getDomainUser(),
+            window.electron.getTicketOptions(),
+        ])
+        return { curr, userName, queueOptions }
+    },
+    null as { curr: CredentialItem, userName: string, queueOptions: TicketQueueOption[] } | null,
+    { immediate: false, resetOnExecute: false },
+)
 
 const shouldPromptDraftSave = computed(() => {
     return hasUnsavedDraftChanges.value
@@ -38,11 +50,9 @@ const shouldPromptDraftSave = computed(() => {
 onMounted(async () => {
     ticketStore.hydrateTicketDraft()
 
-    const [curr, userName, queueOptions] = await Promise.all([
-        window.electron.getCurrent(),
-        window.electron.getDomainUser(),
-        window.electron.getTicketOptions(),
-    ])
+    const bootstrap = await executeLoadTicketBootstrap(0)
+    if (!bootstrap) return
+    const { curr, userName, queueOptions } = bootstrap
     Object.assign(current, curr)
     credentialReady.value = Boolean(
         curr.client_id?.trim() &&
@@ -208,7 +218,7 @@ const goCredentialSetting = async () => {
         <div style="margin-bottom: 8px; font-weight: 600;"></div>
 
         <el-link :href="link.href" target="_blank" @click.prevent="electron.openLink(link.href)">{{ link.txt
-            }}</el-link>
+        }}</el-link>
     </el-card>
 </div>
 </template>
