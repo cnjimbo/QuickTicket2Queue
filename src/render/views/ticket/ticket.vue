@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { refAutoReset, useAsyncState } from '@vueuse/core'
 import { computed, reactive, ref, onMounted, watch } from 'vue'
-import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRouteQuery } from '@vueuse/router'
 
 import { storeToRefs } from 'pinia'
 import { useTicketStore, fieldLabels } from '@render/stores/ticket'
@@ -11,7 +12,12 @@ import { getDraftLeaveDecision } from '@render/utils/draft-leave-confirm'
 
 const electron = window.electron;
 const router = useRouter()
-const route = useRoute()
+const queueQuery = useRouteQuery<string | null>('queue', null)
+const fromHistoryCopyQuery = useRouteQuery<string | null>('fromHistoryCopy', null)
+const copyUserNameQuery = useRouteQuery<string | null>('copyUserName', null)
+const copyTitleQuery = useRouteQuery<string | null>('copyTitle', null)
+const copyContentQuery = useRouteQuery<string | null>('copyContent', null)
+const copyQueueValQuery = useRouteQuery<string | null>('copyQueueVal', null)
 
 function applyQueueFromRouteParam(rawQueue: string | null) {
     if (typeof rawQueue !== 'string' || !rawQueue.trim()) {
@@ -31,7 +37,7 @@ function applyQueueFromRouteParam(rawQueue: string | null) {
 }
 
 function readQueueFromRoute(): string | null {
-    const queryQueue = route.query.queue
+    const queryQueue = queueQuery.value
     if (typeof queryQueue === 'string' && queryQueue.trim()) {
         return queryQueue
     }
@@ -88,7 +94,7 @@ onMounted(async () => {
 
     applyQueueFromRouteParam(readQueueFromRoute())
 
-    const isHistoryCopy = route.query.fromHistoryCopy === '1'
+    const isHistoryCopy = fromHistoryCopyQuery.value === '1'
 
     if (isHistoryCopy) {
         const copyPayload = ticketStore.consumeHistoryCopyPayload()
@@ -97,17 +103,10 @@ onMounted(async () => {
             return
         }
 
-        const queryUserName = router.currentRoute.value.query.copyUserName
-        const copyUserName = typeof queryUserName === 'string' ? queryUserName : ''
-
-        const queryTitle = router.currentRoute.value.query.copyTitle
-        const copyTitle = typeof queryTitle === 'string' ? queryTitle : ''
-
-        const queryContent = router.currentRoute.value.query.copyContent
-        const copyContent = typeof queryContent === 'string' ? queryContent : ''
-
-        const queryQueueVal = router.currentRoute.value.query.copyQueueVal
-        const copyQueueVal = typeof queryQueueVal === 'string' ? queryQueueVal : ''
+        const copyUserName = copyUserNameQuery.value?.trim() ?? ''
+        const copyTitle = copyTitleQuery.value?.trim() ?? ''
+        const copyContent = copyContentQuery.value ?? ''
+        const copyQueueVal = copyQueueValQuery.value?.trim() ?? ''
 
         ticketStore.setTicketFieldsWithoutDraft({
             userName: copyUserName,
@@ -121,7 +120,7 @@ onMounted(async () => {
 })
 
 watch(
-    () => route.query.queue,
+    queueQuery,
     () => {
         applyQueueFromRouteParam(readQueueFromRoute())
     },
