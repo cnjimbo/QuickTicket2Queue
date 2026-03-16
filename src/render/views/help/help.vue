@@ -46,8 +46,8 @@ const workflowSteps = [
 ]
 
 const GITHUB_FEEDBACK_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new/choose'
-const GITHUB_FEATURE_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new?labels=enhancement&template=feature_request.md'
-const GITHUB_BUG_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new?labels=bug&template=bug_report.md'
+const GITHUB_FEATURE_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new/choose?template=feature_request.yml'
+const GITHUB_BUG_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new/choose?template=bug_report.yml'
 
 const openLink = (url: string) => window.electron.openLink(url)
 

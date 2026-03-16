@@ -1,0 +1,102 @@
+name: "✨ 功能建议"
+description: "建议一个新功能或改进现有功能"
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你提出宝贵的功能建议！请填写以下信息帮助我们更好地理解你的需求。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "📋 功能描述"
+      description: "请清晰地描述你期望的新功能或现有功能的改进"
+      placeholder: |
+        例如：希望在工单提交时能够保存草稿，这样在中途不用担心内容丢失...
+      rows: 4
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: "🎯 使用场景与价值"
+      description: "这个功能解决了什么问题？在哪些场景下会用到？"
+      placeholder: |
+        当前痛点：现在每次填写工单都要从头开始，如果中途被打断就丢失了
+        期望改进：保存草稿可以让我们在多次中断后继续编辑，节省时间
+      rows: 4
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: modules
+    attributes:
+      label: "📌 涉及的功能模块"
+      description: "选择这个功能涉及的模块（可多选）"
+      options:
+        - label: "凭据管理 - 维护 OAuth 凭据和环境配置"
+        - label: "队列配置 - 管理 ServiceNow 队列映射和描述"
+        - label: "工单提交 - 填写和提交工单的核心流程"
+        - label: "工单历史 - 查看历史工单和复制"
+        - label: "环境切换 - pfetst / pfestg / pfeprod 环境管理"
+        - label: "UI 界面 - 整体视觉和交互体验"
+        - label: "其他 - 其他方面"
+
+  - type: dropdown
+    id: impact_scope
+    attributes:
+      label: "💥 影响范围"
+      description: "这个功能影响的范围"
+      options:
+        - "单个功能"
+        - "多个功能"
+        - "整体体验"
+        - "不确定"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "⚡ 优先级"
+      description: "你认为这个功能的优先级"
+      options:
+        - "Nice to have（可选功能）"
+        - "Medium（中等重要）"
+        - "High（很重要）"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "💡 可能的解决方案（可选）"
+      description: "如果你有技术方案的想法，可以描述一下"
+      placeholder: |
+        例如：可以在 Pinia store 里维护一个 draft 状态，用户离开工单页时自动保存到 localStorage...
+      rows: 3
+
+  - type: textarea
+    id: related
+    attributes:
+      label: "🔗 相关信息（可选）"
+      description: "任何额外的背景信息或相关 Issue / PR 链接"
+      placeholder: |
+        例如：类似的 Issue #123，或者某个 PR 的讨论...
+      rows: 2
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "✅ 检查清单"
+      description: "请确保你已经完成以下检查"
+      options:
+        - label: "我已经搜索了现有 Issue，确认没有重复"
+          required: true
+        - label: "我提供了清晰的功能描述和使用场景"
+          required: true
+        - label: "我的建议与项目定位相符（快速提交 ServiceNow 工单）"
+          required: true
