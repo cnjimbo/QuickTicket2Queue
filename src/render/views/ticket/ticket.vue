@@ -30,6 +30,8 @@ const current = reactive<CredentialItem>({
 const credentialReady = ref(true)
 
 onMounted(async () => {
+    ticketStore.hydrateTicketDraft()
+
     const [curr, userName, queueOptions] = await Promise.all([
         window.electron.getCurrent(),
         window.electron.getDomainUser(),
@@ -145,7 +147,7 @@ const goCredentialSetting = async () => {
         <div style="margin-bottom: 8px; font-weight: 600;"></div>
 
         <el-link :href="link.href" target="_blank" @click.prevent="electron.openLink(link.href)">{{ link.txt
-            }}</el-link>
+        }}</el-link>
     </el-card>
 </div>
 </template>
