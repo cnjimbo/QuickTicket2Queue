@@ -72,27 +72,27 @@ const router = useRouter()
 const { state: options, isLoading: loading, execute: executeLoadOptions } = useAsyncState(
     () => window.electron.getTicketOptions(),
     [] as TicketQueueOption[],
-    { immediate: true, resetOnExecute: false },
+    { immediate: true, resetOnExecute: false, throwError: true },
 )
 const { isLoading: adding, execute: executeAddOption } = useAsyncState(
     ({ des, queue }: { des: string, queue: string }) => window.electron.addTicketOption({ des, queue }),
     undefined,
-    { immediate: false, resetOnExecute: false },
+    { immediate: false, resetOnExecute: false, throwError: true },
 )
 const { isLoading: syncing, execute: executeSyncOptions } = useAsyncState(
     (mode: SyncMode) => window.electron.syncTicketOptionsFromGithub(mode),
     undefined,
-    { immediate: false, resetOnExecute: false },
+    { immediate: false, resetOnExecute: false, throwError: true },
 )
 const { isLoading: resetting, execute: executeResetOptions } = useAsyncState(
     () => window.electron.resetTicketOptions(),
     undefined,
-    { immediate: false, resetOnExecute: false },
+    { immediate: false, resetOnExecute: false, throwError: true },
 )
 const { execute: executeDeleteOption } = useAsyncState(
     (queue: string) => window.electron.deleteTicketOption(queue),
     undefined,
-    { immediate: false, resetOnExecute: false },
+    { immediate: false, resetOnExecute: false, throwError: true },
 )
 
 const newOption = reactive<TicketQueueOption>({
@@ -109,7 +109,12 @@ function showNotice(type: 'success' | 'error', text: string) {
 }
 
 const loadOptions = async () => {
-    await executeLoadOptions(0)
+    try {
+        await executeLoadOptions(0)
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '加载队列配置失败，请稍后重试'
+        showNotice('error', message)
+    }
 }
 
 const handleAdd = async () => {
@@ -120,17 +125,27 @@ const handleAdd = async () => {
         return
     }
 
-    await executeAddOption(0, { des, queue })
-    newOption.des = ''
-    newOption.queue = ''
-    await loadOptions()
-    showNotice('success', '新增成功')
+    try {
+        await executeAddOption(0, { des, queue })
+        newOption.des = ''
+        newOption.queue = ''
+        await loadOptions()
+        showNotice('success', '新增成功')
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '新增失败，请稍后重试'
+        showNotice('error', message)
+    }
 }
 
 const handleDelete = async (queue: string) => {
-    await executeDeleteOption(0, queue)
-    await loadOptions()
-    showNotice('success', '删除成功')
+    try {
+        await executeDeleteOption(0, queue)
+        await loadOptions()
+        showNotice('success', '删除成功')
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '删除失败，请稍后重试'
+        showNotice('error', message)
+    }
 }
 
 const handleReset = async () => {
@@ -200,7 +215,12 @@ const handleSuggestDefaultQueue = () => {
 }
 
 const jumpToTicket = async (queue: string) => {
-    await router.push(`/ticket/ticket/queue/${encodeURIComponent(queue)}`)
+    await router.push({
+        path: '/ticket/ticket',
+        query: {
+            queue,
+        },
+    })
 }
 
 </script>

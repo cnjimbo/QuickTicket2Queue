@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { refAutoReset, useAsyncState } from '@vueuse/core'
-import { computed, reactive, ref, onMounted } from 'vue'
-import { useRouter, onBeforeRouteLeave } from 'vue-router'
-import { useRouteParams } from '@vueuse/router'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 
 import { storeToRefs } from 'pinia'
 import { useTicketStore, fieldLabels } from '@render/stores/ticket'
@@ -12,8 +11,33 @@ import { getDraftLeaveDecision } from '@render/utils/draft-leave-confirm'
 
 const electron = window.electron;
 const router = useRouter()
-const routeQueue = useRouteParams<string | null>('queue', null)
-const routeFromHistoryCopy = useRouteParams<string | null>('fromHistoryCopy', null)
+const route = useRoute()
+
+function applyQueueFromRouteParam(rawQueue: string | null) {
+    if (typeof rawQueue !== 'string' || !rawQueue.trim()) {
+        return
+    }
+
+    const normalizedQueue = (() => {
+        try {
+            return decodeURIComponent(rawQueue).trim()
+        } catch {
+            return rawQueue.trim()
+        }
+    })()
+
+    if (!normalizedQueue) return
+    ticketStore.setTicketField('queue_val', normalizedQueue)
+}
+
+function readQueueFromRoute(): string | null {
+    const queryQueue = route.query.queue
+    if (typeof queryQueue === 'string' && queryQueue.trim()) {
+        return queryQueue
+    }
+
+    return null
+}
 
 definePage({
     meta: {
@@ -62,12 +86,9 @@ onMounted(async () => {
     ticketStore.setTicketField('userName', userName)
     options.value = queueOptions
 
-    const queueValue = routeQueue.value
-    if (typeof queueValue === 'string' && queueValue.trim()) {
-        ticketStore.setTicketField('queue_val', queueValue.trim())
-    }
+    applyQueueFromRouteParam(readQueueFromRoute())
 
-    const isHistoryCopy = routeFromHistoryCopy.value === '1'
+    const isHistoryCopy = route.query.fromHistoryCopy === '1'
 
     if (isHistoryCopy) {
         const copyPayload = ticketStore.consumeHistoryCopyPayload()
@@ -98,6 +119,13 @@ onMounted(async () => {
 
     ticketStore.refreshDraftBaseline()
 })
+
+watch(
+    () => route.query.queue,
+    () => {
+        applyQueueFromRouteParam(readQueueFromRoute())
+    },
+)
 
 onBeforeRouteLeave(async () => {
     const decision = await getDraftLeaveDecision({
@@ -209,7 +237,7 @@ const goCredentialSetting = async () => {
         <div style="margin-bottom: 8px; font-weight: 600;"></div>
 
         <el-link :href="link.href" target="_blank" @click.prevent="electron.openLink(link.href)">{{ link.txt
-            }}</el-link>
+        }}</el-link>
     </el-card>
 </div>
 </template>

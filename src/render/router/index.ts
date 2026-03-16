@@ -10,27 +10,10 @@ const safeRoutes = routes.filter(
     Boolean(route && typeof route === "object" && "path" in route),
 );
 
-// Add default route redirect by creating a new array to avoid mutating the auto-generated routes
-const appRoutes = [
-  {
-    path: "/",
-    redirect: "/ticket/ticket",
-  },
-  {
-    path: "/ticket/ticket/queue/:queue",
-    component: () => import("../views/ticket/ticket.vue"),
-  },
-  {
-    path: "/ticket/ticket/copy/:fromHistoryCopy",
-    component: () => import("../views/ticket/ticket.vue"),
-  },
-  ...safeRoutes,
-];
-
 export const router = createRouter({
   history: createWebHistory(),
   // resolver,
-  routes: appRoutes,
+  routes: safeRoutes,
 });
 
 if (import.meta.hot) {

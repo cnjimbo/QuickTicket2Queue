@@ -1,3 +1,9 @@
+<route lang="json">
+{
+  "redirect": "/ticket/ticket"
+}
+</route>
+
 <script setup lang="ts">
 </script>
 
