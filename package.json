@@ -54,6 +54,7 @@
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@eslint/js": "^10.0.1",
+    "@iconify-json/mdi": "^1.2.3",
     "@vitejs/plugin-vue": "6.0.4",
     "@vue/compiler-sfc": "3.5.30",
     "electron": "40.8.0",

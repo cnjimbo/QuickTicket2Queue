@@ -19,6 +19,15 @@
         <el-text>共 {{ options.length }} 条队列配置</el-text>
         <div class="toolbar-actions">
             <el-button :loading="loading" @click="loadOptions">刷新</el-button>
+
+            <el-button :disabled="loading || adding || syncing" @click="handleSuggestDefaultQueue">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
+                    style="margin-right: 6px; vertical-align: -2px;">
+                    <path fill="currentColor"
+                        d="M12 .5A12 12 0 0 0 8.2 23.9c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.7-2.7-.3-5.6-1.4-5.6-6.1 0-1.3.5-2.4 1.2-3.3-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.6 3.3-1.2 3.3-1.2.7 1.6.3 2.8.1 3.1.8.9 1.2 2 1.2 3.3 0 4.7-2.9 5.8-5.7 6.1.5.4.9 1.2.9 2.4v3.6c0 .4.2.7.8.6A12 12 0 0 0 12 .5Z" />
+                </svg>
+                Edit Queues
+            </el-button>
             <el-button type="primary" :loading="syncing" :disabled="loading || adding" @click="handleSyncFromGithub">同步
                 GitHub 配置</el-button>
             <el-button type="warning" :disabled="loading || adding" @click="handleReset">恢复默认</el-button>
@@ -130,6 +139,7 @@ const handleReset = async () => {
 }
 
 type SyncMode = 'merge' | 'overwrite'
+const GITHUB_TICKET_OPTIONS_EDIT_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/edit/main/config/ticket-options.default.json'
 
 const syncFromGithub = async (mode: SyncMode) => {
     syncing.value = true
@@ -157,6 +167,10 @@ const confirmSyncOverwrite = async () => {
 
 const handleSyncFromGithub = () => {
     syncDialogVisible.value = true
+}
+
+const handleSuggestDefaultQueue = () => {
+    window.electron.openLink(GITHUB_TICKET_OPTIONS_EDIT_URL)
 }
 
 const jumpToTicket = async (queue: string) => {
