@@ -7,7 +7,8 @@
   "author": "cnjimbo",
   "main": "dist/main/index.js",
   "scripts": {
-    "clean": "rimraf dist",
+    "clean": "rimraf dist/main dist/preload dist/render dist/builder-debug.yml dist/builder-effective-config.yaml",
+    "clean:all": "rimraf dist build",
     "ensure:install": "pnpm i",
     "pregen:ipc": "pnpm run ensure:install",
     "gen:ipc": "tsx scripts/generate-ipc-methods.ts",
@@ -19,6 +20,7 @@
     "debug": "vite -- --dsb-debug",
     "prebuild": "pnpm run ensure:install && pnpm run gen:ipc",
     "build": "pnpm run clean && vite build",
+    "dist:win": "electron-builder --config electron-builder.config.ts --win nsis",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
@@ -101,6 +103,6 @@
     ]
   },
   "volta": {
-    "node": "24.14.0"
+    "node": "22.22.1"
   }
 }
