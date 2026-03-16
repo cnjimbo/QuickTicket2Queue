@@ -95,8 +95,5 @@ body:
       description: "请确保你已经完成以下检查"
       options:
         - label: "我已经搜索了现有 Issue，确认没有重复"
-          required: true
         - label: "我提供了清晰的功能描述和使用场景"
-          required: true
         - label: "我的建议与项目定位相符（快速提交 ServiceNow 工单）"
-          required: true
