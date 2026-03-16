@@ -4,7 +4,6 @@ import { ipcInvoke } from './auto-gen/electron.ipc-auto'
 export default {
   ipcRenderer,
   ...ipcInvoke,
-  sendMsg: ipcInvoke.msg,
   readCredential: ipcInvoke.readCredential,
   onAppCloseRequested: (cb: () => void | Promise<void>) => {
     const listener = () => {
@@ -41,7 +40,4 @@ export default {
       ipcRenderer.off("top-toolbar-visibility-changed", listener);
     };
   },
-  onReplyMsg: (cb: (msg: string) => void) => ipcRenderer.on('reply-msg', (...args: [unknown, string]) => {
-    cb(args[1])
-  }),
 }

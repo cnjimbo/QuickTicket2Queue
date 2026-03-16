@@ -23,8 +23,6 @@ export const ipcInvoke = {
     ipcRenderer.invoke('get-ticket-options', ...args) as unknown as PreloadInvokeReturn<'get-ticket-options', true>,
   getCurrent: (...args: IpcInvokeArgs<'getCurrent'>): PreloadInvokeReturn<'getCurrent', true> =>
     ipcRenderer.invoke('getCurrent', ...args) as unknown as PreloadInvokeReturn<'getCurrent', true>,
-  msg: (...args: IpcInvokeArgs<'msg'>): PreloadInvokeReturn<'msg', false> =>
-    ipcRenderer.invoke('msg', ...args) as unknown as PreloadInvokeReturn<'msg', false>,
   openLink: (...args: IpcInvokeArgs<'open-link'>): PreloadInvokeReturn<'open-link', true> =>
     ipcRenderer.invoke('open-link', ...args) as unknown as PreloadInvokeReturn<'open-link', true>,
   readCredential: (...args: IpcInvokeArgs<'readCredential'>): PreloadInvokeReturn<'readCredential', true> =>

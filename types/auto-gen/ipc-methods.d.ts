@@ -35,10 +35,6 @@ export interface IpcInvokeMap {
     params: []
     return: Promise<CredentialItem>
   }
-  'msg': {
-    params: [msg: string]
-    return: Observable<string>
-  }
   'open-link': {
     params: [url: string]
     return: Promise<void>
