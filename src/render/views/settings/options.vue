@@ -200,7 +200,7 @@ const handleSuggestDefaultQueue = () => {
 }
 
 const jumpToTicket = async (queue: string) => {
-    await router.push({ path: '/ticket/ticket', query: { queue } })
+    await router.push(`/ticket/ticket/queue/${encodeURIComponent(queue)}`)
 }
 
 </script>

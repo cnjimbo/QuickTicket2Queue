@@ -16,6 +16,14 @@ const appRoutes = [
     path: "/",
     redirect: "/ticket/ticket",
   },
+  {
+    path: "/ticket/ticket/queue/:queue",
+    component: () => import("../views/ticket/ticket.vue"),
+  },
+  {
+    path: "/ticket/ticket/copy/:fromHistoryCopy",
+    component: () => import("../views/ticket/ticket.vue"),
+  },
   ...safeRoutes,
 ];
 

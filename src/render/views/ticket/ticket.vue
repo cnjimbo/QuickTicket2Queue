@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { refAutoReset, useAsyncState } from '@vueuse/core'
 import { computed, reactive, ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRouteParams } from '@vueuse/router'
 
 import { storeToRefs } from 'pinia'
 import { useTicketStore, fieldLabels } from '@render/stores/ticket'
-import { CredentialItem, TicketQueueOption } from '@/types/orm_types'
+import type { CredentialItem, TicketQueueOption } from '@/types/orm_types'
 import { getEnvTagType } from '@render/utils/env-tag'
 import { getDraftLeaveDecision } from '@render/utils/draft-leave-confirm'
 
 const electron = window.electron;
-const route = useRoute()
 const router = useRouter()
+const routeQueue = useRouteParams<string | null>('queue', null)
+const routeFromHistoryCopy = useRouteParams<string | null>('fromHistoryCopy', null)
 
 definePage({
     meta: {
@@ -61,16 +62,12 @@ onMounted(async () => {
     ticketStore.setTicketField('userName', userName)
     options.value = queueOptions
 
-    const queryQueue = route.query.queue
-    const queueValue = Array.isArray(queryQueue) ? queryQueue[0] : queryQueue
+    const queueValue = routeQueue.value
     if (typeof queueValue === 'string' && queueValue.trim()) {
         ticketStore.setTicketField('queue_val', queueValue.trim())
     }
 
-    const fromHistoryCopy = route.query.fromHistoryCopy
-    const isHistoryCopy = Array.isArray(fromHistoryCopy)
-        ? fromHistoryCopy.includes('1')
-        : fromHistoryCopy === '1'
+    const isHistoryCopy = routeFromHistoryCopy.value === '1'
 
     if (isHistoryCopy) {
         const copyPayload = ticketStore.consumeHistoryCopyPayload()
@@ -79,16 +76,16 @@ onMounted(async () => {
             return
         }
 
-        const queryUserName = route.query.copyUserName
+        const queryUserName = router.currentRoute.value.query.copyUserName
         const copyUserName = typeof queryUserName === 'string' ? queryUserName : ''
 
-        const queryTitle = route.query.copyTitle
+        const queryTitle = router.currentRoute.value.query.copyTitle
         const copyTitle = typeof queryTitle === 'string' ? queryTitle : ''
 
-        const queryContent = route.query.copyContent
+        const queryContent = router.currentRoute.value.query.copyContent
         const copyContent = typeof queryContent === 'string' ? queryContent : ''
 
-        const queryQueueVal = route.query.copyQueueVal
+        const queryQueueVal = router.currentRoute.value.query.copyQueueVal
         const copyQueueVal = typeof queryQueueVal === 'string' ? queryQueueVal : ''
 
         ticketStore.setTicketFieldsWithoutDraft({
