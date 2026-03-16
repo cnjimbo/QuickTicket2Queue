@@ -58,13 +58,55 @@ function formatSchemaErrors(errors?: ErrorObject[] | null): string {
         .join("; ");
 }
 
+function formatFetchFailure(context: string, url: string, error: unknown): string {
+    if (error instanceof Error) {
+        return `${context}失败: ${error.message} (${url})`;
+    }
+    return `${context}失败: ${String(error)} (${url})`;
+}
+
+async function fetchTextOrThrow(url: string, timeoutMs: number): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+        controller.abort();
+    }, timeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Accept: "application/json,text/plain,*/*",
+            },
+            signal: controller.signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+        }
+
+        return await response.text();
+    } catch (error) {
+        throw new Error(formatFetchFailure("请求远程配置", url, error), {
+            cause: error,
+        });
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function fetchJsonOrThrow(url: string, timeoutMs: number): Promise<unknown> {
+    const raw = await fetchTextOrThrow(url, timeoutMs);
+    try {
+        return JSON.parse(raw) as unknown;
+    } catch (error) {
+        throw new Error(`解析远程 JSON 失败 (${url})`, {
+            cause: error,
+        });
+    }
+}
+
 async function loadSchemaByConfigPath(schemaPathValue?: string): Promise<unknown> {
     if (schemaPathValue && /^https?:\/\//i.test(schemaPathValue)) {
-        const response = await fetch(schemaPathValue);
-        if (!response.ok) {
-            throw new Error(`加载远程 schema 失败: ${response.status} ${response.statusText}`);
-        }
-        return await response.json() as unknown;
+        return await fetchJsonOrThrow(schemaPathValue, FETCH_TIMEOUT_MS);
     }
 
     const schemaPath = schemaPathValue
@@ -141,36 +183,12 @@ function mergeByQueue(current: TicketQueueOption[], incoming: TicketQueueOption[
     return [...current, ...toAppend];
 }
 
-async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-        controller.abort();
-    }, timeoutMs);
-
-    try {
-        const response = await fetch(url, {
-            headers: {
-                Accept: "application/json,text/plain,*/*",
-            },
-            signal: controller.signal,
-        });
-
-        if (!response.ok) {
-            throw new Error(`${response.status} ${response.statusText}`);
-        }
-
-        return await response.text();
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
 async function fetchRemoteTicketOptionsRawJson(): Promise<string> {
     const attempts: string[] = [];
 
     for (const url of GITHUB_TICKET_OPTIONS_FALLBACK_URLS) {
         try {
-            return await fetchTextWithTimeout(url, FETCH_TIMEOUT_MS);
+            return await fetchTextOrThrow(url, FETCH_TIMEOUT_MS);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
             attempts.push(`${url} -> ${reason}`);
