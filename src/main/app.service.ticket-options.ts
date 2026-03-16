@@ -1,18 +1,52 @@
 import { Injectable } from "@nestjs/common";
 import Store from "electron-store";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { TicketQueueOption } from "@/types/orm_types";
 
-const defaultTicketOptions: TicketQueueOption[] = [
-    { des: "域名申请、解析", queue: "GBL-NETWORK DDI" },
-    { des: "China Support/update L1 KB", queue: "CHN-WPO-APP SUPPORT" },
-    { des: "本地应用运维", queue: "CHN-LOCAL APP DEVOPS" },
-    { des: "China IICS Platform Support Queue and DL", queue: "CHN-IICS PLATFORM SUPPORT" },
-    { des: "CHN-DEP NG APPROVAL", queue: "CHN-DEP NG APPROVAL" },
-    { des: "VPN相关问题", queue: "GBL-NETWORK VPN" },
-];
+const TICKET_OPTIONS_CONFIG_PATH = path.resolve(process.cwd(), "config", "ticket-options.default.json");
 
-function cloneDefaultTicketOptions(): TicketQueueOption[] {
-    return defaultTicketOptions.map((item) => ({ ...item }));
+function cloneOptions(options: TicketQueueOption[]): TicketQueueOption[] {
+    return options.map((item) => ({ ...item }));
+}
+
+function normalizeTicketOptions(input: unknown): TicketQueueOption[] {
+    if (!Array.isArray(input)) {
+        throw new Error("ticket-options.default.json 的 items 必须是数组");
+    }
+
+    const options = input
+        .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const des = String((item as Record<string, unknown>).des ?? "").trim();
+            const queue = String((item as Record<string, unknown>).queue ?? "").trim();
+            if (!des || !queue) return null;
+            return { des, queue } satisfies TicketQueueOption;
+        })
+        .filter((item): item is TicketQueueOption => item !== null);
+
+    if (!options.length) {
+        throw new Error("ticket-options.default.json 未包含有效 des/queue 数据");
+    }
+
+    return options;
+}
+
+async function loadDefaultOptionsFromConfig(): Promise<TicketQueueOption[]> {
+    const raw = await fs.readFile(TICKET_OPTIONS_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+
+    // Backward compatible: accept both legacy array and new object+items format.
+    if (Array.isArray(parsed)) {
+        return normalizeTicketOptions(parsed);
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+        throw new Error("ticket-options.default.json 必须是对象，且包含 items 字段");
+    }
+
+    const items = (parsed as Record<string, unknown>).items;
+    return normalizeTicketOptions(items);
 }
 
 @Injectable()
@@ -37,12 +71,18 @@ export class AppServiceTicketOptions {
 
     public async get(): Promise<TicketQueueOption[]> {
         try {
+            const defaults = await loadDefaultOptionsFromConfig();
             const options =
-                this.store.get("ticketOptions", cloneDefaultTicketOptions());
+                this.store.get("ticketOptions", cloneOptions(defaults));
             return options;
         } catch (error) {
             console.error("Failed to read ticket options from store:", error);
-            return cloneDefaultTicketOptions();
+            try {
+                return await loadDefaultOptionsFromConfig();
+            } catch (configError) {
+                console.error("Failed to load default options from config:", configError);
+                return [];
+            }
         }
     }
 
@@ -77,12 +117,12 @@ export class AppServiceTicketOptions {
 
     public async reset(): Promise<TicketQueueOption[]> {
         try {
-            const options = cloneDefaultTicketOptions();
+            const options = await loadDefaultOptionsFromConfig();
             this.store.set("ticketOptions", options);
             return options;
         } catch (error) {
             console.error("Failed to reset ticket options in store:", error);
-            return cloneDefaultTicketOptions();
+            return [];
         }
     }
 }
