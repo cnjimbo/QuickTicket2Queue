@@ -48,7 +48,5 @@ export const useCredentialStore = defineStore('credential', {
         setTableData(state: CredentialItem[]) {
             this.tableData = state
         }
-    },
-
-    persist: true
+    }
 })
