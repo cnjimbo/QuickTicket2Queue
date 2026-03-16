@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { refAutoReset, useAsyncState } from '@vueuse/core'
-import { computed, reactive, ref, onMounted, watch } from 'vue'
+import { computed, reactive, onMounted, watch } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useRouteQuery } from '@vueuse/router'
 
@@ -53,14 +53,12 @@ definePage({
     }
 })
 
-const options = ref<TicketQueueOption[]>([])
 const ticketStore = useTicketStore()
 const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges, isSubmitting } = storeToRefs(ticketStore)
 const current = reactive<CredentialItem>({
     env: 'pfetst',
 })
-const credentialReady = ref(true)
-const { execute: executeLoadTicketBootstrap } = useAsyncState(
+const { state: ticketBootstrap, execute: executeLoadTicketBootstrap } = useAsyncState(
     async () => {
         const [curr, userName, queueOptions] = await Promise.all([
             window.electron.getCurrent(),
@@ -72,6 +70,12 @@ const { execute: executeLoadTicketBootstrap } = useAsyncState(
     null as { curr: CredentialItem, userName: string, queueOptions: TicketQueueOption[] } | null,
     { immediate: false, resetOnExecute: false },
 )
+const options = computed(() => ticketBootstrap.value?.queueOptions ?? [])
+const credentialReady = computed(() => Boolean(
+    current.client_id?.trim() &&
+    current.client_secret?.trim() &&
+    current.sn_host?.trim(),
+))
 
 const shouldPromptDraftSave = computed(() => {
     return hasUnsavedDraftChanges.value
@@ -82,15 +86,9 @@ onMounted(async () => {
 
     const bootstrap = await executeLoadTicketBootstrap(0)
     if (!bootstrap) return
-    const { curr, userName, queueOptions } = bootstrap
+    const { curr, userName } = bootstrap
     Object.assign(current, curr)
-    credentialReady.value = Boolean(
-        curr.client_id?.trim() &&
-        curr.client_secret?.trim() &&
-        curr.sn_host?.trim(),
-    )
     ticketStore.setTicketField('userName', userName)
-    options.value = queueOptions
 
     applyQueueFromRouteParam(readQueueFromRoute())
 
