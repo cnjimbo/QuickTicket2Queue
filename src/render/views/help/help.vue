@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePage({
   meta: {
-    label: '使用帮助',
+    label: '帮助',
     description: '了解应用的核心功能与使用方式',
     order: 900,
   },
