@@ -1,10 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import Store from "electron-store";
+import Ajv from "ajv";
+import type { ErrorObject } from "ajv";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { TicketQueueOption } from "@/types/orm_types";
 
 const TICKET_OPTIONS_CONFIG_PATH = path.resolve(process.cwd(), "config", "ticket-options.default.json");
+const DEFAULT_TICKET_OPTIONS_SCHEMA_PATH = path.resolve(process.cwd(), "config", "ticket-options.schema.json");
+const ajv = new Ajv({ allErrors: true, strict: false });
 
 function cloneOptions(options: TicketQueueOption[]): TicketQueueOption[] {
     return options.map((item) => ({ ...item }));
@@ -32,20 +36,66 @@ function normalizeTicketOptions(input: unknown): TicketQueueOption[] {
     return options;
 }
 
+function formatSchemaErrors(errors?: ErrorObject[] | null): string {
+    if (!errors || errors.length === 0) {
+        return "unknown schema validation error";
+    }
+
+    return errors
+        .map((error) => {
+            const location = error.instancePath || "/";
+            return `${location} ${error.message ?? "is invalid"}`;
+        })
+        .join("; ");
+}
+
+async function loadSchemaByConfigPath(schemaPathValue?: string): Promise<unknown> {
+    if (schemaPathValue && /^https?:\/\//i.test(schemaPathValue)) {
+        const response = await fetch(schemaPathValue);
+        if (!response.ok) {
+            throw new Error(`加载远程 schema 失败: ${response.status} ${response.statusText}`);
+        }
+        return await response.json() as unknown;
+    }
+
+    const schemaPath = schemaPathValue
+        ? path.resolve(path.dirname(TICKET_OPTIONS_CONFIG_PATH), schemaPathValue)
+        : DEFAULT_TICKET_OPTIONS_SCHEMA_PATH;
+
+    const rawSchema = await fs.readFile(schemaPath, "utf8");
+    return JSON.parse(rawSchema) as unknown;
+}
+
+async function validateConfigWithSchema(config: unknown, schemaPathValue?: string): Promise<Record<string, unknown>> {
+    const schema = await loadSchemaByConfigPath(schemaPathValue);
+    const validate = ajv.compile<Record<string, unknown>>(schema as object);
+    const valid = validate(config);
+    if (!valid) {
+        throw new Error(`ticket-options.default.json schema 校验失败: ${formatSchemaErrors(validate.errors)}`);
+    }
+
+    return config as Record<string, unknown>;
+}
+
 async function loadDefaultOptionsFromConfig(): Promise<TicketQueueOption[]> {
     const raw = await fs.readFile(TICKET_OPTIONS_CONFIG_PATH, "utf8");
     const parsed = JSON.parse(raw) as unknown;
 
-    // Backward compatible: accept both legacy array and new object+items format.
-    if (Array.isArray(parsed)) {
-        return normalizeTicketOptions(parsed);
-    }
+    // Backward compatible: treat legacy array format as { items } before schema validation.
+    const configCandidate = Array.isArray(parsed)
+        ? ({ items: parsed } as Record<string, unknown>)
+        : parsed;
 
-    if (!parsed || typeof parsed !== "object") {
+    if (!configCandidate || typeof configCandidate !== "object") {
         throw new Error("ticket-options.default.json 必须是对象，且包含 items 字段");
     }
 
-    const items = (parsed as Record<string, unknown>).items;
+    const schemaPathValue = typeof (configCandidate as Record<string, unknown>).$schema === "string"
+        ? (configCandidate as Record<string, unknown>).$schema as string
+        : undefined;
+    const configRoot = await validateConfigWithSchema(configCandidate, schemaPathValue);
+
+    const items = configRoot.items;
     return normalizeTicketOptions(items);
 }
 

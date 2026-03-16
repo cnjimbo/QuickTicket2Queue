@@ -27,6 +27,7 @@
     "@nestjs/common": "^11.1.16",
     "@nestjs/core": "^11.1.16",
     "@nestjs/microservices": "^11.1.16",
+    "ajv": "^8.18.0",
     "axios": "^1.13.6",
     "builder-util-runtime": "^9.5.1",
     "call-bind-apply-helpers": "^1.0.2",

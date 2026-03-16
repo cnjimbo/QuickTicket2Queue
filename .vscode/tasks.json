@@ -1,24 +1,33 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "watch: gen:ipc (src/main)",
-            "type": "shell",
-            "command": "pnpm dlx chokidar-cli \"src/main/**/*.ts\" -c \"if /I \"\"{event}\"\"==\"\"change\"\" pnpm gen:ipc\" --debounce 1000",
-            "isBackground": true,
-            "runOptions": {
-                "runOn": "folderOpen"
-            },
-            "options": {
-                "shell": {
-                    "executable": "cmd.exe",
-                    "args": [
-                        "/d",
-                        "/c"
-                    ]
-                }
-            },
-            "problemMatcher": []
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "watch: gen:ipc (src/main)",
+			"type": "shell",
+			"command": "pnpm dlx chokidar-cli \"src/main/**/*.ts\" -c \"if /I \"\"{event}\"\"==\"\"change\"\" pnpm gen:ipc\" --debounce 1000",
+			"isBackground": true,
+			"runOptions": {
+				"runOn": "folderOpen"
+			},
+			"options": {
+				"shell": {
+					"executable": "cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "dev: vite electron",
+			"type": "shell",
+			"command": "pnpm",
+			"args": [
+				"dev"
+			],
+			"isBackground": true
+		}
+	]
 }
