@@ -22,19 +22,89 @@ function isPortableWindowsBuild(): boolean {
   return process.platform === "win32" && Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
 }
 
+type UpdateStrategy = "installer-auto" | "portable-manual";
+
+function resolveUpdateStrategy(): UpdateStrategy {
+  if (isPortableWindowsBuild()) {
+    return "portable-manual";
+  }
+
+  return "installer-auto";
+}
+
 function getGitHubReleasesUrl(): string {
   const repository = process.env.GITHUB_REPOSITORY || DEFAULT_GITHUB_REPOSITORY;
   return `https://github.com/${repository}/releases/latest`;
 }
 
+function getReleaseMirrorUrls(): string[] {
+  const primary = getGitHubReleasesUrl();
+  const customMirror = process.env.UPDATE_RELEASE_MIRROR_URL?.trim();
+
+  const mirrors = [
+    primary,
+    primary.replace("github.com", "cdn.jsdelivr.net/gh"),
+    // Common GitHub proxy/mirror endpoints for regions with restricted access.
+    `https://ghproxy.com/${primary}`,
+    `https://gh.llkk.cc/${primary}`,
+  ];
+
+  if (customMirror) {
+    mirrors.unshift(customMirror);
+  }
+
+  return [...new Set(mirrors)];
+}
+
+async function resolveReachableReleaseUrl(): Promise<string> {
+  const candidates = getReleaseMirrorUrls();
+  const TIMEOUT_MS = 5000;
+
+  // Helper: Execute promise with timeout using Promise.race()
+  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+    Promise.race<T>([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
+      ),
+    ]);
+
+  const fetchTasks = candidates.map((url) =>
+    withTimeout(
+      fetch(url, { method: "HEAD", redirect: "follow" })
+        .then((response) => ({ url, reachable: response.ok })),
+      TIMEOUT_MS
+    ).catch(() => ({ url, reachable: false }))
+  );
+
+  const results = await Promise.allSettled(fetchTasks);
+
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value.reachable) {
+      console.log(`[Update] Release URL resolved: ${result.value.url}`);
+      return result.value.url;
+    }
+  }
+
+  console.warn(`[Update] All mirrors unreachable, using primary: ${candidates[0]}`);
+  return candidates[0];
+}
+
 function setupAutoUpdater() {
   if (!app.isPackaged) return;
 
-  const isPortableWindows = isPortableWindowsBuild();
-  const releasesUrl = getGitHubReleasesUrl();
+  const strategy = resolveUpdateStrategy();
+  const isPortableManual = strategy === "portable-manual";
+  let releaseUrlPromise: Promise<string> | null = null;
+  const getReleaseUrl = () => {
+    if (!releaseUrlPromise) {
+      releaseUrlPromise = resolveReachableReleaseUrl();
+    }
+    return releaseUrlPromise;
+  };
 
-  autoUpdater.autoDownload = !isPortableWindows;
-  autoUpdater.autoInstallOnAppQuit = !isPortableWindows;
+  autoUpdater.autoDownload = !isPortableManual;
+  autoUpdater.autoInstallOnAppQuit = !isPortableManual;
 
   autoUpdater.on("error", (error) => {
     console.error("Auto update error:", error);
@@ -43,8 +113,9 @@ function setupAutoUpdater() {
   autoUpdater.on("update-available", async (info) => {
     console.log("Update available:", info.version);
 
-    if (!isPortableWindows) return;
+    if (!isPortableManual) return;
 
+    const releasesUrl = await getReleaseUrl();
     const { response } = await dialog.showMessageBox({
       type: "info",
       buttons: ["Download", "Later"],
@@ -52,7 +123,7 @@ function setupAutoUpdater() {
       cancelId: 1,
       title: "Update Available",
       message: `A new version (${info.version}) is available.`,
-      detail: "Portable builds do not support in-place auto install. Open GitHub Releases to download the latest portable package.",
+      detail: "Portable builds do not support in-place auto install. Open release page to download the latest portable package (GitHub/CDN fallback).",
     });
 
     if (response === 0) {
@@ -65,7 +136,7 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on("update-downloaded", async () => {
-    if (isPortableWindows) return;
+    if (isPortableManual) return;
 
     const { response } = await dialog.showMessageBox({
       type: "info",
@@ -81,12 +152,27 @@ function setupAutoUpdater() {
     }
   });
 
-  const checkForUpdates = isPortableWindows
+  const checkForUpdates = isPortableManual
     ? autoUpdater.checkForUpdates()
     : autoUpdater.checkForUpdatesAndNotify();
 
-  checkForUpdates.catch((error) => {
+  checkForUpdates.catch(async (error) => {
     console.error("Failed to check for updates:", error);
+
+    const releasesUrl = await getReleaseUrl();
+    const { response } = await dialog.showMessageBox({
+      type: "warning",
+      buttons: ["Open Release Page", "Dismiss"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Update Check Failed",
+      message: "Unable to check updates via the default channel.",
+      detail: "You can open the release page. If GitHub is unavailable, a CDN mirror will be used automatically.",
+    });
+
+    if (response === 0) {
+      await shell.openExternal(releasesUrl);
+    }
   });
 }
 

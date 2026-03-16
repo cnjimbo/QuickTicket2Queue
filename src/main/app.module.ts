@@ -32,6 +32,7 @@ const SHOW_NATIVE_DIALOG_CHANNEL = "show-native-dialog";
           height: 1024,
           autoHideMenuBar: isPackaged,
           icon: !isPackaged ? devIconPath : undefined,
+          backgroundColor: "#050915",
           webPreferences: {
             contextIsolation: true,
             preload: join(__dirname, "../preload/index.js"),

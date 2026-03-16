@@ -201,11 +201,14 @@ const navLinks = computed(() => {
   font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   background: #050915;
   color: #e2e8f0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .app-root {
-  height: 98vh;
-  width: 99vw;
+  height: 100vh;
+  width: 100vw;
   overflow: hidden;
 }
 
@@ -217,6 +220,7 @@ const navLinks = computed(() => {
   padding: 8px 12px;
   background: #1f2937;
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  overflow: hidden;
 }
 
 .dev-urlbar__btn {
@@ -255,8 +259,8 @@ const navLinks = computed(() => {
 .app-shell {
   display: grid;
   grid-template-columns: 180px 1fr;
-  height: 98vh;
-  width: 99vw;
+  height: 100%;
+  width: 100%;
 }
 
 .app-shell.with-dev-urlbar {
@@ -338,6 +342,7 @@ const navLinks = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 }
 
 .display-header {
