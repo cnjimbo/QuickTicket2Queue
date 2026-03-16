@@ -357,10 +357,11 @@ const navLinks = computed(() => {
   padding: 18px;
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.08);
   min-height: 0;
+  overflow: auto;
 }
 
 .display-component {
-  height: 100%;
+  min-height: 100%;
 }
 
 .empty-state {

@@ -8,41 +8,13 @@ definePage({
 })
 
 const workflowSteps = [
-  {
-    icon: '🔑',
-    title: '配置凭据',
-    description: '填写各环境的 client_id / secret / host，设置当前生效环境。',
-  },
-  {
-    icon: '📁',
-    title: '维护队列',
-    description: '添加或管理常用队列与描述映射，方便快速筛选。',
-  },
-  {
-    icon: '📝',
-    title: '填写工单',
-    description: '系统自动填入域账号，补充标题、描述并选择目标队列。',
-  },
-  {
-    icon: '🚀',
-    title: '提交工单',
-    description: '一键提交，自动获取 OAuth token 并发送至 ServiceNow。',
-  },
-  {
-    icon: '✅',
-    title: '查看结果',
-    description: '获得工单链接，一键跳转至 ServiceNow 记录页。',
-  },
-  {
-    icon: '🕒',
-    title: '查看历史',
-    description: '在历史记录页查看所有已提交工单的单号、环境和时间。',
-  },
-  {
-    icon: '♻️',
-    title: '复制为新工单',
-    description: '从历史记录一键复制内容，返回编辑节点处理相同或相似的新工单。',
-  },
+  { icon: '🔑', title: '配置凭据', description: '填写各环境凭据与主机地址。' },
+  { icon: '📁', title: '维护队列', description: '维护常用队列映射。' },
+  { icon: '📝', title: '填写工单', description: '补充标题、内容并选择队列。' },
+  { icon: '🚀', title: '提交工单', description: '一键提交到 ServiceNow。' },
+  { icon: '✅', title: '查看结果', description: '获取工单链接并可跳转。' },
+  { icon: '🕒', title: '查看历史', description: '查看已提交记录。' },
+  { icon: '♻️', title: '复制为新工单', description: '复制历史记录快速复用。' },
 ]
 
 const GITHUB_FEEDBACK_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new/choose'
@@ -103,7 +75,7 @@ const features = [
     <h3>反馈与建议</h3>
     <p class="feedback-subtitle">你的反馈是项目持续改进的动力</p>
     <div class="feedback-grid">
-      <el-card v-for="item in feedbackItems" :key="item.title" class="feedback-card" shadow="hover">
+      <el-card v-for="item in feedbackItems" :key="item.title" class="feedback-card" shadow="never">
         <div class="feedback-icon">{{ item.icon }}</div>
         <h4 class="feedback-title">{{ item.title }}</h4>
         <p class="feedback-desc">{{ item.description }}</p>
@@ -122,7 +94,7 @@ const features = [
   <el-divider />
 
   <div class="feature-grid">
-    <el-card v-for="feature in features" :key="feature.title" class="feature-card" shadow="hover">
+    <el-card v-for="feature in features" :key="feature.title" class="feature-card" shadow="never">
       <div class="feature-icon">{{ feature.icon }}</div>
       <h3 class="feature-title">{{ feature.title }}</h3>
       <p class="feature-desc">{{ feature.description }}</p>
@@ -133,29 +105,15 @@ const features = [
 
   <div class="workflow-section">
     <h3>典型使用流程</h3>
-    <div class="workflow-pipeline">
-      <template v-for="(step, index) in workflowSteps" :key="step.title">
-        <div class="pipeline-step">
-          <div class="pipeline-icon">{{ step.icon }}</div>
-          <div class="pipeline-body">
-            <div class="pipeline-title">{{ step.title }}</div>
-            <div class="pipeline-desc">{{ step.description }}</div>
-          </div>
-        </div>
-        <div v-if="index < workflowSteps.length - 1" class="pipeline-arrow">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M3 8h10M9 4l4 4-4 4" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"
-              stroke-linejoin="round" />
-          </svg>
-        </div>
-        <div v-else class="pipeline-arrow pipeline-loop">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M3 8h10M9 4l4 4-4 4" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"
-              stroke-linejoin="round" />
-          </svg>
-          <div class="loop-label">编辑</div>
-        </div>
-      </template>
+    <div class="workflow-diagram">
+      <el-steps :active="workflowSteps.length" finish-status="success" align-center class="workflow-steps">
+        <el-step v-for="step in workflowSteps" :key="step.title" :title="step.title" :description="step.description">
+          <template #icon>
+            <span class="workflow-step-icon">{{ step.icon }}</span>
+          </template>
+        </el-step>
+      </el-steps>
+      <div class="workflow-loop-note">♻️ 复制后回到“填写工单”，编辑并再次提交，形成闭环。</div>
     </div>
   </div>
 
@@ -166,23 +124,26 @@ const features = [
 .help-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .help-header {
   text-align: center;
-  padding: 4px 0 2px;
+  padding: 0;
 }
 
 .help-header h2 {
-  font-size: 22px;
+  font-size: 18px;
   color: #0f172a;
-  margin-bottom: 3px;
+  margin: 0 0 2px;
+  line-height: 1.25;
 }
 
 .help-subtitle {
   color: #64748b;
-  font-size: 14px;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .feature-grid {
@@ -234,75 +195,33 @@ const features = [
 }
 
 .workflow-pipeline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 4px;
+  display: none;
 }
 
-.pipeline-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+.workflow-diagram {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 8px 10px;
-  min-width: 140px;
-  max-width: 185px;
-  flex: 1;
+  border-radius: 12px;
+  padding: 12px 10px 10px;
+  width: 100%;
 }
 
-.pipeline-icon {
-  font-size: 18px;
-  flex-shrink: 0;
+.workflow-steps {
+  margin-bottom: 8px;
+}
+
+.workflow-step-icon {
+  font-size: 16px;
   line-height: 1;
-  margin-top: 1px;
 }
 
-.pipeline-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.pipeline-title {
+.workflow-loop-note {
   font-size: 12px;
-  font-weight: 600;
-  color: #0f172a;
-  white-space: nowrap;
-}
-
-.pipeline-desc {
-  font-size: 11px;
-  color: #64748b;
-  line-height: 1.5;
-}
-
-.pipeline-arrow {
-  display: flex;
-  align-items: center;
-  padding-top: 14px;
-  flex-shrink: 0;
-  color: #93c5fd;
-}
-
-.pipeline-arrow.pipeline-loop {
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  color: #60a5fa;
-}
-
-.loop-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #0ea5e9;
-  white-space: nowrap;
+  color: #0369a1;
   background: #e0f2fe;
-  padding: 2px 6px;
-  border-radius: 4px;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 6px 10px;
 }
 
 .feedback-section {
@@ -359,5 +278,28 @@ const features = [
   font-size: 13px;
   color: #64748b;
   margin: 0;
+}
+
+/* Keep the flow diagram animation, disable other control animations in this page. */
+.help-container :deep(.el-card),
+.help-container :deep(.el-card__body),
+.help-container :deep(.el-button),
+.help-container :deep(.el-link),
+.help-container :deep(.el-divider),
+.help-container :deep(.el-step),
+.help-container :deep(.el-step__head),
+.help-container :deep(.el-step__line),
+.help-container :deep(.el-step__main),
+.help-container :deep(.el-step__description) {
+  transition: none !important;
+  animation: none !important;
+}
+
+.feedback-section,
+.feedback-section *,
+.feature-grid,
+.feature-grid * {
+  transition: none !important;
+  animation: none !important;
 }
 </style>
