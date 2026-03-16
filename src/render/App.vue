@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useTicketStore } from '@render/stores/ticket'
+import { getDraftLeaveDecision } from '@render/utils/draft-leave-confirm'
 
 const router = useRouter()
 const route = useRoute()
@@ -81,22 +82,6 @@ function handleGlobalKeydown(event: KeyboardEvent) {
   }
 }
 
-function getDraftLeaveDecision(actionLabel: string) {
-  if (!shouldPromptDraftSave.value) {
-    return 'allow'
-  }
-
-  const shouldSave = window.confirm(`当前工单内容已修改，是否保存到缓存后再${actionLabel}？\n点击“确定”保存并${actionLabel}，点击“取消”进入下一步确认。`)
-  if (shouldSave) {
-    ticketStore.saveTicketDraft()
-    ticketStore.refreshDraftBaseline()
-    return 'allow'
-  }
-
-  const shouldDiscard = window.confirm(`不保存会丢失本次修改，是否继续${actionLabel}？\n点击“确定”不保存直接${actionLabel}，点击“取消”留在当前页面。`)
-  return shouldDiscard ? 'allow' : 'stay'
-}
-
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (skipBeforeUnloadPrompt.value || !shouldPromptDraftSave.value) return
 
@@ -105,7 +90,14 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 }
 
 async function handleAppCloseRequested() {
-  const decision = getDraftLeaveDecision('退出程序')
+  const decision = await getDraftLeaveDecision({
+    actionLabel: '退出程序',
+    shouldPrompt: shouldPromptDraftSave.value,
+    onSave: async () => {
+      ticketStore.saveTicketDraft()
+      ticketStore.refreshDraftBaseline()
+    },
+  })
   if (decision !== 'allow') {
     await window.electron.respondToAppCloseRequest(false)
     return

@@ -6,15 +6,6 @@
         </div>
     </Teleport>
 
-    <el-dialog v-model="syncDialogVisible" title="同步 GitHub 默认配置" width="420px" :append-to-body="true" align-center>
-        <span>请选择同步策略：覆盖当前会完全替换本地列表；合并到当前只会补充缺失队列。</span>
-        <template #footer>
-            <el-button @click="syncDialogVisible = false">取消</el-button>
-            <el-button type="primary" :loading="syncing" @click="confirmSyncMerge">合并到当前</el-button>
-            <el-button type="warning" :loading="syncing" @click="confirmSyncOverwrite">覆盖当前</el-button>
-        </template>
-    </el-dialog>
-
     <div class="toolbar">
         <el-text>共 {{ options.length }} 条队列配置</el-text>
         <div class="toolbar-actions">
@@ -28,9 +19,10 @@
                 </svg>
                 Edit Queues
             </el-button>
-            <el-button type="primary" :loading="syncing" :disabled="loading || adding" @click="handleSyncFromGithub">同步
-                GitHub 配置</el-button>
-            <el-button type="warning" :disabled="loading || adding" @click="handleReset">恢复默认</el-button>
+            <el-button type="primary" :loading="syncing" :disabled="loading || adding"
+                @click="handleSyncFromGithub">Pull GitHub Queues</el-button>
+            <el-button type="danger" :loading="resetting" :disabled="loading || adding || syncing || resetting"
+                @click="handleReset">恢复默认</el-button>
         </div>
     </div>
 
@@ -62,15 +54,16 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { TicketQueueOption } from '@/types/orm_types'
+import { showNativeDialog } from '@render/utils/native-dialog'
 
 definePage({
     meta: {
-        label: '队列配置',
+        label: '队列',
         description: '维护 ticket queue 与描述映射',
         parent: '/settings',
         parentLabel: '设置',
         parentOrder: 3,
-        order: 88,
+        order: 300,
     }
 })
 
@@ -78,7 +71,7 @@ const options = ref<TicketQueueOption[]>([])
 const loading = ref(false)
 const adding = ref(false)
 const syncing = ref(false)
-const syncDialogVisible = ref(false)
+const resetting = ref(false)
 const router = useRouter()
 
 const newOption = reactive<TicketQueueOption>({
@@ -133,9 +126,31 @@ const handleDelete = async (queue: string) => {
 }
 
 const handleReset = async () => {
-    await window.electron.resetTicketOptions()
-    await loadOptions()
-    showNotice('success', '已恢复默认列表')
+    const shouldReset = await showNativeDialog({
+        title: '危险操作确认',
+        message: '恢复默认会覆盖当前本地队列配置，未同步到 GitHub 的改动将丢失。是否继续？',
+        buttons: ['恢复默认', '取消'],
+        type: 'warning',
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+    })
+
+    if (shouldReset !== 0) {
+        return
+    }
+
+    resetting.value = true
+    try {
+        await window.electron.resetTicketOptions()
+        await loadOptions()
+        showNotice('success', '已恢复默认列表')
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '恢复默认失败，请稍后重试'
+        showNotice('error', message)
+    } finally {
+        resetting.value = false
+    }
 }
 
 type SyncMode = 'merge' | 'overwrite'
@@ -155,18 +170,27 @@ const syncFromGithub = async (mode: SyncMode) => {
     }
 }
 
-const confirmSyncMerge = async () => {
-    syncDialogVisible.value = false
-    await syncFromGithub('merge')
-}
-
-const confirmSyncOverwrite = async () => {
-    syncDialogVisible.value = false
-    await syncFromGithub('overwrite')
-}
-
 const handleSyncFromGithub = () => {
-    syncDialogVisible.value = true
+    void (async () => {
+        const response = await showNativeDialog({
+            title: '同步 GitHub 默认配置',
+            message: '请选择同步策略：覆盖当前会完全替换本地列表；合并到当前只会补充缺失队列。',
+            buttons: ['合并到当前', '覆盖当前', '取消'],
+            type: 'question',
+            defaultId: 0,
+            cancelId: 2,
+            noLink: true,
+        })
+
+        if (response === 0) {
+            await syncFromGithub('merge')
+            return
+        }
+
+        if (response === 1) {
+            await syncFromGithub('overwrite')
+        }
+    })()
 }
 
 const handleSuggestDefaultQueue = () => {

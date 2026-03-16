@@ -6,14 +6,6 @@
     </div>
   </Teleport>
 
-  <el-dialog v-model="clearDialogVisible" title="清空确认" width="360px" :append-to-body="true" align-center>
-    <span>确定要清空所有凭据吗？</span>
-    <template #footer>
-      <el-button @click="clearDialogVisible = false">取消</el-button>
-      <el-button type="danger" @click="confirmClear">确定</el-button>
-    </template>
-  </el-dialog>
-
   <div class="toolbar">
     <el-text>共 {{ tableData.length }} 组凭据</el-text>
     <div class="toolbar-actions">
@@ -67,15 +59,16 @@ import { storeToRefs } from 'pinia'
 import { useCredentialStore } from '@render/stores/credentials'
 import type { CredentialItem } from '@/types/orm_types'
 import { getEnvTagType } from '@render/utils/env-tag'
+import { showNativeConfirmDialog } from '@render/utils/native-dialog'
 
 definePage({
   meta: {
-    label: '凭据管理',
+    label: '凭据',
     description: '维护 Client ID、Secret 与主机地址',
     parent: '/settings',
     parentLabel: '设置',
     parentOrder: 3,
-    order: 200
+    order: 400
   }
 })
 
@@ -83,7 +76,6 @@ const store = useCredentialStore()
 const { tableData, currentKey } = storeToRefs(store)
 const { handleEdit, setCurrent } = store
 
-const clearDialogVisible = ref(false)
 const successVisible = ref(false)
 const baselineSnapshot = ref('')
 
@@ -120,14 +112,20 @@ function showSuccess() {
 }
 
 const handleClear = () => {
-  clearDialogVisible.value = true
-}
+  void (async () => {
+    const shouldClear = await showNativeConfirmDialog({
+      title: '清空确认',
+      message: '确定要清空所有凭据吗？',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+    })
 
-const confirmClear = async () => {
-  clearDialogVisible.value = false
-  await store.clearCredential()
-  await loadCredential()
-  showSuccess()
+    if (!shouldClear) return
+
+    await store.clearCredential()
+    await loadCredential()
+    showSuccess()
+  })()
 }
 
 onMounted(async () => {

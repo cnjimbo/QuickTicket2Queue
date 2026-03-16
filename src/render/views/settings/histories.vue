@@ -1,13 +1,5 @@
 <template>
 <div class="histories-container">
-  <el-dialog v-model="clearDialogVisible" title="清空确认" width="360px" :append-to-body="true" align-center>
-    <span>确定要清空所有历史记录吗？</span>
-    <template #footer>
-      <el-button @click="clearDialogVisible = false">取消</el-button>
-      <el-button type="danger" @click="confirmClear">确定</el-button>
-    </template>
-  </el-dialog>
-
   <div class="toolbar">
     <el-text>共 {{ histories.length }} 条历史记录</el-text>
     <div class="toolbar-actions">
@@ -55,15 +47,16 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useTicketStore } from '@render/stores/ticket'
 import { TicketHistoryItem } from '@/types/orm_types';
+import { showNativeConfirmDialog } from '@render/utils/native-dialog'
 
 definePage({
   meta: {
-    label: '单据历史',
+    label: '历史',
     description: '查看单据历史记录',
     parent: '/settings',
     parentLabel: '设置',
     parentOrder: 3,
-    order: 201
+    order: 200
   }
 })
 
@@ -94,7 +87,6 @@ const getTxt = (ticket: TicketHistoryItem): "pfetst" | "pfestg" | "pfeprod" => {
 }
 const histories = ref<TicketHistoryItem[]>([])
 const loading = ref(false)
-const clearDialogVisible = ref(false)
 const router = useRouter()
 const ticketStore = useTicketStore()
 
@@ -111,15 +103,21 @@ const loadHistories = async () => {
   }
 }
 
-const confirmClear = async () => {
-  clearDialogVisible.value = false
-  await window.electron.clearTicketHistory()
-  await loadHistories()
-  ElMessage.success('历史记录已清空')
-}
-
 const handleClear = () => {
-  clearDialogVisible.value = true
+  void (async () => {
+    const shouldClear = await showNativeConfirmDialog({
+      title: '清空确认',
+      message: '确定要清空所有历史记录吗？',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+    })
+
+    if (!shouldClear) return
+
+    await window.electron.clearTicketHistory()
+    await loadHistories()
+    ElMessage.success('历史记录已清空')
+  })()
 }
 
 const openRecord = (url: string) => {

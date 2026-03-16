@@ -7,6 +7,7 @@ import { storeToRefs } from 'pinia'
 import { useTicketStore, fieldLabels } from '@render/stores/ticket'
 import { CredentialItem, TicketQueueOption } from '@/types/orm_types'
 import { getEnvTagType } from '@render/utils/env-tag'
+import { getDraftLeaveDecision } from '@render/utils/draft-leave-confirm'
 
 const electron = window.electron;
 const route = useRoute()
@@ -14,7 +15,7 @@ const router = useRouter()
 
 definePage({
     meta: {
-        label: '工单中心',
+        label: '工单',
         description: '创建并提交新的 ServiceNow 工单',
         order: 100 // top‑level first item
     }
@@ -32,22 +33,6 @@ const credentialReady = ref(true)
 const shouldPromptDraftSave = computed(() => {
     return hasUnsavedDraftChanges.value
 })
-
-const getDraftLeaveDecision = (actionLabel: string) => {
-    if (!shouldPromptDraftSave.value) {
-        return 'allow'
-    }
-
-    const shouldSave = window.confirm(`当前工单内容已修改，是否保存到缓存后再${actionLabel}？\n点击“确定”保存并${actionLabel}，点击“取消”进入下一步确认。`)
-    if (shouldSave) {
-        ticketStore.saveTicketDraft()
-        ticketStore.refreshDraftBaseline()
-        return 'allow'
-    }
-
-    const shouldDiscard = window.confirm(`不保存会丢失本次修改，是否继续${actionLabel}？\n点击“确定”不保存直接${actionLabel}，点击“取消”留在当前页面。`)
-    return shouldDiscard ? 'allow' : 'stay'
-}
 
 onMounted(async () => {
     ticketStore.hydrateTicketDraft()
@@ -108,7 +93,14 @@ onMounted(async () => {
 })
 
 onBeforeRouteLeave(async () => {
-    const decision = getDraftLeaveDecision('离开')
+    const decision = await getDraftLeaveDecision({
+        actionLabel: '离开',
+        shouldPrompt: shouldPromptDraftSave.value,
+        onSave: async () => {
+            ticketStore.saveTicketDraft()
+            ticketStore.refreshDraftBaseline()
+        },
+    })
     if (decision === 'allow') {
         return true
     }

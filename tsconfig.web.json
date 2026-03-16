@@ -5,6 +5,7 @@
     // "**/*.ts",
     "./**/*.d.ts",
     "./src/render/**/*",
+    "./src/render/utils/draft-leave-confirm.ts",
     "vite.config.mts",
   ],
   "compilerOptions": {
