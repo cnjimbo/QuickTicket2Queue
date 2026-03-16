@@ -51,6 +51,7 @@
 </template>
 
 <script setup lang="ts">
+import { useTimeoutFn } from '@vueuse/core'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { TicketQueueOption } from '@/types/orm_types'
@@ -81,13 +82,15 @@ const newOption = reactive<TicketQueueOption>({
 
 const noticeText = ref('')
 const noticeType = ref<'success' | 'error'>('success')
+const { start: startHideNotice, stop: stopHideNotice } = useTimeoutFn(() => {
+    noticeText.value = ''
+}, 2500, { immediate: false })
 
 function showNotice(type: 'success' | 'error', text: string) {
     noticeType.value = type
     noticeText.value = text
-    setTimeout(() => {
-        noticeText.value = ''
-    }, 2500)
+    stopHideNotice()
+    startHideNotice()
 }
 
 const loadOptions = async () => {

@@ -20,6 +20,12 @@ importers:
       '@nestjs/microservices':
         specifier: ^11.1.16
         version: 11.1.16(@nestjs/common@11.1.16(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.16)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@vueuse/core':
+        specifier: 12.0.0
+        version: 12.0.0(typescript@5.9.3)
+      '@vueuse/electron':
+        specifier: 12.0.0
+        version: 12.0.0(electron@40.8.0)(typescript@5.9.3)
       ajv:
         specifier: ^8.18.0
         version: 8.18.0
@@ -1287,6 +1293,11 @@ packages:
 
   '@vueuse/core@12.0.0':
     resolution: {integrity: sha512-C12RukhXiJCbx4MGhjmd/gH52TjJsc3G0E0kQj/kb19H3Nt6n1CA4DRWuTdWWcaFRdlTe0npWDS942mvacvNBw==}
+
+  '@vueuse/electron@12.0.0':
+    resolution: {integrity: sha512-it6TMeqObF5mNSktiC9NeReHJwVYswiZRGY0msqqXp1H+770kCIhPHIuN+3TczLBwCrkN1VCQlWA8zBoaJVYBQ==}
+    peerDependencies:
+      electron: '>=9.0.0'
 
   '@vueuse/metadata@12.0.0':
     resolution: {integrity: sha512-Yzimd1D3sjxTDOlF05HekU5aSGdKjxhuhRFHA7gDWLn57PRbBIh+SF5NmjhJ0WRgF3my7T8LBucyxdFJjIfRJQ==}
@@ -4823,6 +4834,14 @@ snapshots:
       '@types/web-bluetooth': 0.0.20
       '@vueuse/metadata': 12.0.0
       '@vueuse/shared': 12.0.0(typescript@5.9.3)
+      vue: 3.5.30(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@vueuse/electron@12.0.0(electron@40.8.0)(typescript@5.9.3)':
+    dependencies:
+      '@vueuse/shared': 12.0.0(typescript@5.9.3)
+      electron: 40.8.0
       vue: 3.5.30(typescript@5.9.3)
     transitivePeerDependencies:
       - typescript

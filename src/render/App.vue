@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -120,19 +121,16 @@ onMounted(() => {
     }
   })
   stopAppCloseSync = window.electron.onAppCloseRequested(handleAppCloseRequested)
-
-  window.addEventListener('popstate', syncDevUrlInput)
-  window.addEventListener('keydown', handleGlobalKeydown)
-  window.addEventListener('beforeunload', handleBeforeUnload)
 })
+
+useEventListener(window, 'popstate', syncDevUrlInput)
+useEventListener(window, 'keydown', handleGlobalKeydown)
+useEventListener(window, 'beforeunload', handleBeforeUnload)
 
 onBeforeUnmount(() => {
   stopRouteSync?.()
   stopTopToolbarSync?.()
   stopAppCloseSync?.()
-  window.removeEventListener('popstate', syncDevUrlInput)
-  window.removeEventListener('keydown', handleGlobalKeydown)
-  window.removeEventListener('beforeunload', handleBeforeUnload)
   skipBeforeUnloadPrompt.value = false
 })
 

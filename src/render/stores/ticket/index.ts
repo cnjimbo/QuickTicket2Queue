@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { useStorage } from "@vueuse/core";
 import { TicketResponse, TicketType } from "@/types/orm_types";
 import { computed, reactive, ref, toRaw } from "vue";
 
@@ -30,30 +31,6 @@ const createEmptyDraft = (): TicketDraftCache => ({
   queue_val: "",
 });
 
-function readDraftFromStorage(): TicketDraftCache | null {
-  try {
-    const raw = window.localStorage.getItem(TICKET_DRAFT_STORAGE_KEY);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as Partial<TicketDraftCache>;
-    return {
-      title: String(parsed.title ?? ""),
-      content: String(parsed.content ?? ""),
-      queue_val: String(parsed.queue_val ?? ""),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeDraftToStorage(draft: TicketDraftCache): void {
-  try {
-    window.localStorage.setItem(TICKET_DRAFT_STORAGE_KEY, JSON.stringify(draft));
-  } catch {
-    // Ignore storage write errors (quota, privacy mode, etc.)
-  }
-}
-
 export const useTicketStore = defineStore("ticket", () => {
   const ticket = reactive<TicketType>({
     title: "",
@@ -69,6 +46,11 @@ export const useTicketStore = defineStore("ticket", () => {
   const suppressDraftPersistence = ref(false);
   const historyCopyPayload = ref<Partial<TicketType> | null>(null);
   const draftBaselineSnapshot = ref(JSON.stringify(createEmptyDraft()));
+  const draftCache = useStorage<TicketDraftCache>(
+    TICKET_DRAFT_STORAGE_KEY,
+    createEmptyDraft(),
+    localStorage,
+  );
 
   const isFormValid = computed(() =>
     requiredFields.every((field) => (ticket[field] ?? "").trim().length > 0),
@@ -92,7 +74,7 @@ export const useTicketStore = defineStore("ticket", () => {
   });
 
   const saveTicketDraft = () => {
-    writeDraftToStorage(getTicketDraftSnapshot());
+    draftCache.value = getTicketDraftSnapshot();
   };
 
   const refreshDraftBaseline = () => {
@@ -134,7 +116,7 @@ export const useTicketStore = defineStore("ticket", () => {
   };
 
   const hydrateTicketDraft = () => {
-    const draft = readDraftFromStorage();
+    const draft = draftCache.value;
     if (!draft) return;
 
     ticket.title = draft.title;

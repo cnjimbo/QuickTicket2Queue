@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useTimeoutFn } from '@vueuse/core'
 import { computed, reactive, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
@@ -136,12 +137,14 @@ const enableSubmitBtn = computed(() => {
 })
 
 const submitErrorMessage = ref('')
+const { start: startHideSubmitError, stop: stopHideSubmitError } = useTimeoutFn(() => {
+    submitErrorMessage.value = ''
+}, 2500, { immediate: false })
 
 function showSubmitError(message: string) {
     submitErrorMessage.value = message
-    setTimeout(() => {
-        submitErrorMessage.value = ''
-    }, 2500)
+    stopHideSubmitError()
+    startHideSubmitError()
 }
 
 async function submitTicket() {
@@ -205,7 +208,7 @@ const goCredentialSetting = async () => {
         <div style="margin-bottom: 8px; font-weight: 600;"></div>
 
         <el-link :href="link.href" target="_blank" @click.prevent="electron.openLink(link.href)">{{ link.txt
-        }}</el-link>
+            }}</el-link>
     </el-card>
 </div>
 </template>

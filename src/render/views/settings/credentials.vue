@@ -54,6 +54,7 @@
 </div>
 </template>
 <script setup lang="ts">
+import { useTimeoutFn } from '@vueuse/core'
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCredentialStore } from '@render/stores/credentials'
@@ -78,6 +79,9 @@ const { handleEdit, setCurrent } = store
 
 const successVisible = ref(false)
 const baselineSnapshot = ref('')
+const { start: startHideSuccessToast, stop: stopHideSuccessToast } = useTimeoutFn(() => {
+  successVisible.value = false
+}, 2500, { immediate: false })
 
 const snapshotTable = (rows: CredentialItem[]): string => {
   return JSON.stringify(rows.map((row) => ({
@@ -108,7 +112,8 @@ const handleSaveAll = async () => {
 
 function showSuccess() {
   successVisible.value = true
-  setTimeout(() => { successVisible.value = false }, 2500)
+  stopHideSuccessToast()
+  startHideSuccessToast()
 }
 
 const handleClear = () => {
