@@ -154,7 +154,7 @@ const handleReset = async () => {
 }
 
 type SyncMode = 'merge' | 'overwrite'
-const GITHUB_TICKET_OPTIONS_EDIT_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/edit/main/config/ticket-options.default.json'
+const GITHUB_TICKET_OPTIONS_EDIT_URL = 'https://github.dev/cnjimbo/QuickTicket2Queue/blob/main/config/ticket-options.default.json'
 
 const syncFromGithub = async (mode: SyncMode) => {
     syncing.value = true

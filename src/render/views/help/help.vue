@@ -9,24 +9,64 @@ definePage({
 
 const workflowSteps = [
   {
+    icon: '🔑',
     title: '配置凭据',
-    description: '在"凭据管理"中填写各环境的 client_id、client_secret 和 sn_host，并设置当前生效环境。',
+    description: '填写各环境的 client_id / secret / host，设置当前生效环境。',
   },
   {
+    icon: '📁',
     title: '维护队列',
-    description: '在"队列配置"中添加或管理常用队列与描述映射，方便在工单页快速筛选。',
+    description: '添加或管理常用队列与描述映射，方便快速筛选。',
   },
   {
+    icon: '📝',
     title: '填写工单',
-    description: '进入"工单中心"，系统自动填入域账号；补充工单标题、详细描述，并从下拉列表选择目标队列。',
+    description: '系统自动填入域账号，补充标题、描述并选择目标队列。',
   },
   {
+    icon: '🚀',
     title: '提交工单',
-    description: '点击"提交工单"，应用自动获取 OAuth token 并将工单发送至 ServiceNow。',
+    description: '一键提交，自动获取 OAuth token 并发送至 ServiceNow。',
   },
   {
+    icon: '✅',
     title: '查看结果',
-    description: '提交成功后页面显示工单链接，可一键跳转；历史记录页也会同步保存本次记录。',
+    description: '获得工单链接，一键跳转至 ServiceNow 记录页。',
+  },
+  {
+    icon: '🕒',
+    title: '查看历史',
+    description: '在历史记录页查看所有已提交工单的单号、环境和时间。',
+  },
+  {
+    icon: '♻️',
+    title: '复制为新工单',
+    description: '从历史记录一键复制内容，快速发起相同或相似的新工单。',
+  },
+]
+
+const GITHUB_FEEDBACK_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new/choose'
+const GITHUB_FEATURE_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new?labels=enhancement&template=feature_request.md'
+const GITHUB_BUG_URL = 'https://github.com/cnjimbo/QuickTicket2Queue/issues/new?labels=bug&template=bug_report.md'
+
+const openLink = (url: string) => window.electron.openLink(url)
+
+const feedbackItems = [
+  {
+    icon: '💡',
+    title: '提出功能建议',
+    description: '有新想法或希望改进某个功能？欢迎在 GitHub 提交 feature request，描述你期望的场景和效果。',
+    buttonText: '提交建议',
+    url: GITHUB_FEATURE_URL,
+    buttonType: 'primary' as const,
+  },
+  {
+    icon: '🐛',
+    title: '报告问题',
+    description: '遇到异常行为或 bug？请在 GitHub 提交 issue，附上复现步骤或截图，帮助我们快速定位和修复。',
+    buttonText: '报告 Bug',
+    url: GITHUB_BUG_URL,
+    buttonType: 'danger' as const,
   },
 ]
 
@@ -49,71 +89,88 @@ const features = [
     description:
       '内置常用 queue 列表，支持新增自定义队列与描述映射，支持删除单条记录，并可随时一键恢复默认列表。',
   },
-  {
-    title: '工单历史记录',
-    icon: '🕒',
-    description:
-      '每次提交成功后自动保存工单记录，可在历史页查看单号、环境、提交时间，并支持一键跳转到对应 ServiceNow 记录页。',
-  },
-  {
-    title: '自动读取域账号',
-    icon: '👤',
-    description:
-      '应用启动时自动读取当前 Windows 域账号并填入工单的 requested by 字段，减少重复输入。',
-  },
-  {
-    title: 'OAuth 令牌自动管理',
-    icon: '🔐',
-    description:
-      '提交工单前自动使用 client credentials 流程获取 access token，无需手动登录 ServiceNow，整个鉴权过程在后台完成。',
-  },
 ]
 </script>
 
 <template>
-  <div class="help-container">
-    <div class="help-header">
-      <h2>你能做什么？</h2>
-      <p class="help-subtitle">Quick Ticket to Queue 的核心功能一览</p>
-    </div>
+<div class="help-container">
+  <div class="help-header">
+    <h2>你能做什么？</h2>
+    <p class="help-subtitle">Quick Ticket to Queue 的核心功能一览</p>
+  </div>
 
-    <div class="feature-grid">
-      <el-card v-for="feature in features" :key="feature.title" class="feature-card" shadow="hover">
-        <div class="feature-icon">{{ feature.icon }}</div>
-        <h3 class="feature-title">{{ feature.title }}</h3>
-        <p class="feature-desc">{{ feature.description }}</p>
+  <div class="feedback-section">
+    <h3>反馈与建议</h3>
+    <p class="feedback-subtitle">你的反馈是项目持续改进的动力</p>
+    <div class="feedback-grid">
+      <el-card v-for="item in feedbackItems" :key="item.title" class="feedback-card" shadow="hover">
+        <div class="feedback-icon">{{ item.icon }}</div>
+        <h4 class="feedback-title">{{ item.title }}</h4>
+        <p class="feedback-desc">{{ item.description }}</p>
+        <el-button :type="item.buttonType" @click="openLink(item.url)">
+          {{ item.buttonText }}
+        </el-button>
       </el-card>
     </div>
+    <p class="feedback-alt">
+      或直接前往
+      <el-link type="primary" @click.prevent="openLink(GITHUB_FEEDBACK_URL)">GitHub Issues</el-link>
+      选择反馈类型。
+    </p>
+  </div>
 
-    <el-divider />
+  <el-divider />
 
-    <div class="workflow-section">
-      <h3>典型使用流程</h3>
-      <el-steps direction="vertical" :active="5" finish-status="success">
-        <el-step v-for="step in workflowSteps" :key="step.title" :title="step.title">
-          <template #description>{{ step.description }}</template>
-        </el-step>
-      </el-steps>
+  <div class="feature-grid">
+    <el-card v-for="feature in features" :key="feature.title" class="feature-card" shadow="hover">
+      <div class="feature-icon">{{ feature.icon }}</div>
+      <h3 class="feature-title">{{ feature.title }}</h3>
+      <p class="feature-desc">{{ feature.description }}</p>
+    </el-card>
+  </div>
+
+  <el-divider />
+
+  <div class="workflow-section">
+    <h3>典型使用流程</h3>
+    <div class="workflow-pipeline">
+      <template v-for="(step, index) in workflowSteps" :key="step.title">
+        <div class="pipeline-step">
+          <div class="pipeline-icon">{{ step.icon }}</div>
+          <div class="pipeline-body">
+            <div class="pipeline-title">{{ step.title }}</div>
+            <div class="pipeline-desc">{{ step.description }}</div>
+          </div>
+        </div>
+        <div v-if="index < workflowSteps.length - 1" class="pipeline-arrow">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </div>
+      </template>
     </div>
   </div>
+
+</div>
 </template>
 
 <style scoped>
 .help-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .help-header {
   text-align: center;
-  padding: 8px 0 4px;
+  padding: 4px 0 2px;
 }
 
 .help-header h2 {
   font-size: 22px;
   color: #0f172a;
-  margin-bottom: 6px;
+  margin-bottom: 3px;
 }
 
 .help-subtitle {
@@ -124,7 +181,7 @@ const features = [
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .feature-card {
@@ -135,7 +192,7 @@ const features = [
 .feature-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .feature-icon {
@@ -159,17 +216,124 @@ const features = [
 .workflow-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .workflow-section h3 {
   font-size: 16px;
   font-weight: 600;
   color: #0f172a;
+  margin: 0;
 }
 
-.workflow-section :deep(.el-step__description) {
+.workflow-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 140px;
+  max-width: 185px;
+  flex: 1;
+}
+
+.pipeline-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.pipeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pipeline-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.pipeline-desc {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.pipeline-arrow {
+  display: flex;
+  align-items: center;
+  padding-top: 14px;
+  flex-shrink: 0;
+  color: #93c5fd;
+}
+
+.feedback-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feedback-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.feedback-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.feedback-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feedback-icon {
+  font-size: 28px;
+}
+
+.feedback-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.feedback-desc {
   font-size: 13px;
   color: #475569;
+  line-height: 1.6;
+  margin: 0;
+  flex: 1;
+}
+
+.feedback-alt {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
 }
 </style>
