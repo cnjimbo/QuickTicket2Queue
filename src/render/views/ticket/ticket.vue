@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { refAutoReset, useAsyncState } from '@vueuse/core'
-import { computed, reactive, onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useRouteQuery } from '@vueuse/router'
 
@@ -55,9 +55,9 @@ definePage({
 
 const ticketStore = useTicketStore()
 const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges, isSubmitting } = storeToRefs(ticketStore)
-const current = reactive<CredentialItem>({
+const defaultCurrent: CredentialItem = {
     env: 'pfetst',
-})
+}
 const { state: ticketBootstrap, execute: executeLoadTicketBootstrap } = useAsyncState(
     async () => {
         const [curr, userName, queueOptions] = await Promise.all([
@@ -70,24 +70,33 @@ const { state: ticketBootstrap, execute: executeLoadTicketBootstrap } = useAsync
     null as { curr: CredentialItem, userName: string, queueOptions: TicketQueueOption[] } | null,
     { immediate: false, resetOnExecute: false },
 )
+const current = computed(() => ticketBootstrap.value?.curr ?? defaultCurrent)
 const options = computed(() => ticketBootstrap.value?.queueOptions ?? [])
 const credentialReady = computed(() => Boolean(
-    current.client_id?.trim() &&
-    current.client_secret?.trim() &&
-    current.sn_host?.trim(),
+    current.value.client_id?.trim() &&
+    current.value.client_secret?.trim() &&
+    current.value.sn_host?.trim(),
 ))
-
-const shouldPromptDraftSave = computed(() => {
-    return hasUnsavedDraftChanges.value
-})
+const shouldPromptDraftSave = computed(() => hasUnsavedDraftChanges.value)
+const link = computed(() =>
+    result.value
+        ? {
+            txt: result.value.result[0].display_value,
+            href: `${current.value.sn_host}/now/sow/record/incident/${result.value.result[0].sys_id}`,
+        }
+        : {
+            txt: 'Composing...',
+            href: `${current.value.sn_host}/now/sow/home`,
+        },
+)
+const enableSubmitBtn = computed(() => credentialReady.value && isFormValid.value && !isSubmitting.value)
 
 onMounted(async () => {
     ticketStore.hydrateTicketDraft()
 
     const bootstrap = await executeLoadTicketBootstrap(0)
     if (!bootstrap) return
-    const { curr, userName } = bootstrap
-    Object.assign(current, curr)
+    const { userName } = bootstrap
     ticketStore.setTicketField('userName', userName)
 
     applyQueueFromRouteParam(readQueueFromRoute())
@@ -148,24 +157,6 @@ const querySearch = (query: string, cb: (results: TicketQueueOption[]) => void) 
                 item.queue.toLowerCase().includes(query.toLowerCase()),
         ),
     )
-
-
-const link = computed(() =>
-    result.value
-        ? {
-            txt: result.value?.result[0].display_value,
-            href: `${current.sn_host}/now/sow/record/incident/${result.value.result[0].sys_id}`,
-        }
-        : {
-            txt: 'waiting...',
-            href: `${current.sn_host}/now/sow/home`,
-        },
-)
-
-const enableSubmitBtn = computed(() => {
-    return credentialReady.value && isFormValid.value && !isSubmitting.value
-
-})
 
 const submitErrorMessage = refAutoReset('', 2500)
 
