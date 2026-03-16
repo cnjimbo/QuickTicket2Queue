@@ -41,7 +41,7 @@ const workflowSteps = [
   {
     icon: '♻️',
     title: '复制为新工单',
-    description: '从历史记录一键复制内容，快速发起相同或相似的新工单。',
+    description: '从历史记录一键复制内容，返回编辑节点处理相同或相似的新工单。',
   },
 ]
 
@@ -147,6 +147,13 @@ const features = [
             <path d="M3 8h10M9 4l4 4-4 4" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"
               stroke-linejoin="round" />
           </svg>
+        </div>
+        <div v-else class="pipeline-arrow pipeline-loop">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+          <div class="loop-label">编辑</div>
         </div>
       </template>
     </div>
@@ -279,6 +286,23 @@ const features = [
   padding-top: 14px;
   flex-shrink: 0;
   color: #93c5fd;
+}
+
+.pipeline-arrow.pipeline-loop {
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: #60a5fa;
+}
+
+.loop-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0ea5e9;
+  white-space: nowrap;
+  background: #e0f2fe;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .feedback-section {
