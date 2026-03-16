@@ -59,6 +59,10 @@ export interface IpcInvokeMap {
     params: [data: CredentialItem[]]
     return: Promise<true>
   }
+  'sync-ticket-options-from-github': {
+    params: [mode: "merge" | "overwrite"]
+    return: Promise<TicketQueueOption[]>
+  }
   'ticket': {
     params: [data: TicketType]
     return: Promise<TicketResponse>

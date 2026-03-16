@@ -66,4 +66,9 @@ export class AppControllerTicket {
   public async resetTicketOptions(): Promise<TicketQueueOption[]> {
     return await this.store.resetTicketOptions();
   }
+
+  @IpcHandle("sync-ticket-options-from-github")
+  public async syncTicketOptionsFromGithub(@Payload() mode: "merge" | "overwrite"): Promise<TicketQueueOption[]> {
+    return await this.store.syncTicketOptionsFromGithub(mode);
+  }
 }

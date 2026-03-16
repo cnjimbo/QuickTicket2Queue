@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { CredentialItem, TicketResult, TicketQueueOption } from "@/types/orm_types";
 import { AppServiceCredential } from "./app.service.credential";
 import { AppServiceTicketHistory } from "./app.service.ticket-history";
-import { AppServiceTicketOptions } from "./app.service.ticket-options";
+import { AppServiceTicketOptions, TicketOptionsSyncMode } from "./app.service.ticket-options";
 
 @Injectable()
 export class AppServiceStore {
@@ -57,5 +57,9 @@ export class AppServiceStore {
 
   public async resetTicketOptions(): Promise<TicketQueueOption[]> {
     return this.ticketOptionsService.reset();
+  }
+
+  public async syncTicketOptionsFromGithub(mode: TicketOptionsSyncMode): Promise<TicketQueueOption[]> {
+    return this.ticketOptionsService.syncFromGithub(mode);
   }
 }

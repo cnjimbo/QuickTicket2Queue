@@ -1,5 +1,13 @@
 <template>
 <div class="histories-container">
+  <el-dialog v-model="clearDialogVisible" title="清空确认" width="360px" :append-to-body="true" align-center>
+    <span>确定要清空所有历史记录吗？</span>
+    <template #footer>
+      <el-button @click="clearDialogVisible = false">取消</el-button>
+      <el-button type="danger" @click="confirmClear">确定</el-button>
+    </template>
+  </el-dialog>
+
   <div class="toolbar">
     <el-text>共 {{ histories.length }} 条历史记录</el-text>
     <div class="toolbar-actions">
@@ -33,7 +41,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { TicketResult } from '@/types/orm_types';
 
 definePage({
@@ -74,6 +82,7 @@ const getTxt = (ticket: TicketResult): "pfetst" | "pfestg" | "pfeprod" => {
 }
 const histories = ref<TicketResult[]>([])
 const loading = ref(false)
+const clearDialogVisible = ref(false)
 
 const loadHistories = async () => {
   loading.value = true
@@ -84,20 +93,15 @@ const loadHistories = async () => {
   }
 }
 
-const handleClear = async () => {
-  try {
-    await ElMessageBox.confirm('确定要清空所有历史记录吗？', '清空确认', {
-      type: 'warning',
-      confirmButtonText: '确定',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
-
+const confirmClear = async () => {
+  clearDialogVisible.value = false
   await window.electron.clearTicketHistory()
-  loadHistories()
+  await loadHistories()
   ElMessage.success('历史记录已清空')
+}
+
+const handleClear = () => {
+  clearDialogVisible.value = true
 }
 
 const openRecord = (url: string) => {

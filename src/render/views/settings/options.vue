@@ -6,10 +6,21 @@
         </div>
     </Teleport>
 
+    <el-dialog v-model="syncDialogVisible" title="同步 GitHub 默认配置" width="420px" :append-to-body="true" align-center>
+        <span>请选择同步策略：覆盖当前会完全替换本地列表；合并到当前只会补充缺失队列。</span>
+        <template #footer>
+            <el-button @click="syncDialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="syncing" @click="confirmSyncMerge">合并到当前</el-button>
+            <el-button type="warning" :loading="syncing" @click="confirmSyncOverwrite">覆盖当前</el-button>
+        </template>
+    </el-dialog>
+
     <div class="toolbar">
         <el-text>共 {{ options.length }} 条队列配置</el-text>
         <div class="toolbar-actions">
             <el-button :loading="loading" @click="loadOptions">刷新</el-button>
+            <el-button type="primary" :loading="syncing" :disabled="loading || adding" @click="handleSyncFromGithub">同步
+                GitHub 配置</el-button>
             <el-button type="warning" :disabled="loading || adding" @click="handleReset">恢复默认</el-button>
         </div>
     </div>
@@ -57,6 +68,8 @@ definePage({
 const options = ref<TicketQueueOption[]>([])
 const loading = ref(false)
 const adding = ref(false)
+const syncing = ref(false)
+const syncDialogVisible = ref(false)
 const router = useRouter()
 
 const newOption = reactive<TicketQueueOption>({
@@ -114,6 +127,36 @@ const handleReset = async () => {
     await window.electron.resetTicketOptions()
     await loadOptions()
     showNotice('success', '已恢复默认列表')
+}
+
+type SyncMode = 'merge' | 'overwrite'
+
+const syncFromGithub = async (mode: SyncMode) => {
+    syncing.value = true
+    try {
+        await window.electron.syncTicketOptionsFromGithub(mode)
+        await loadOptions()
+        showNotice('success', mode === 'overwrite' ? '已使用 GitHub 配置覆盖当前列表' : '已将 GitHub 配置合并到当前列表')
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '同步失败，请稍后重试'
+        showNotice('error', message)
+    } finally {
+        syncing.value = false
+    }
+}
+
+const confirmSyncMerge = async () => {
+    syncDialogVisible.value = false
+    await syncFromGithub('merge')
+}
+
+const confirmSyncOverwrite = async () => {
+    syncDialogVisible.value = false
+    await syncFromGithub('overwrite')
+}
+
+const handleSyncFromGithub = () => {
+    syncDialogVisible.value = true
 }
 
 const jumpToTicket = async (queue: string) => {

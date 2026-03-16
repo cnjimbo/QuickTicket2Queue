@@ -35,6 +35,8 @@ export const ipcInvoke = {
     ipcRenderer.invoke('save-ticket-history', ...args) as unknown as PreloadInvokeReturn<'save-ticket-history', true>,
   saveCredential: (...args: IpcInvokeArgs<'saveCredential'>): PreloadInvokeReturn<'saveCredential', true> =>
     ipcRenderer.invoke('saveCredential', ...args) as unknown as PreloadInvokeReturn<'saveCredential', true>,
+  syncTicketOptionsFromGithub: (...args: IpcInvokeArgs<'sync-ticket-options-from-github'>): PreloadInvokeReturn<'sync-ticket-options-from-github', true> =>
+    ipcRenderer.invoke('sync-ticket-options-from-github', ...args) as unknown as PreloadInvokeReturn<'sync-ticket-options-from-github', true>,
   ticket: (...args: IpcInvokeArgs<'ticket'>): PreloadInvokeReturn<'ticket', true> =>
     ipcRenderer.invoke('ticket', ...args) as unknown as PreloadInvokeReturn<'ticket', true>,
 } as const

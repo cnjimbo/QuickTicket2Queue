@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import Store from "electron-store";
-import Ajv from "ajv";
+import Ajv2020 from "ajv/dist/2020";
 import type { ErrorObject } from "ajv";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -8,7 +8,16 @@ import { TicketQueueOption } from "@/types/orm_types";
 
 const TICKET_OPTIONS_CONFIG_PATH = path.resolve(process.cwd(), "config", "ticket-options.default.json");
 const DEFAULT_TICKET_OPTIONS_SCHEMA_PATH = path.resolve(process.cwd(), "config", "ticket-options.schema.json");
-const ajv = new Ajv({ allErrors: true, strict: false });
+const GITHUB_TICKET_OPTIONS_RAW_URL = process.env.TICKET_OPTIONS_REMOTE_URL
+    || "https://raw.githubusercontent.com/cnjimbo/QuickTicket2Queue/main/config/ticket-options.default.json";
+const GITHUB_TICKET_OPTIONS_FALLBACK_URLS = [
+    GITHUB_TICKET_OPTIONS_RAW_URL,
+    "https://cdn.jsdelivr.net/gh/cnjimbo/QuickTicket2Queue@main/config/ticket-options.default.json",
+];
+const FETCH_TIMEOUT_MS = 15000;
+const ajv = new Ajv2020({ allErrors: true, strict: false });
+
+export type TicketOptionsSyncMode = "merge" | "overwrite";
 
 function cloneOptions(options: TicketQueueOption[]): TicketQueueOption[] {
     return options.map((item) => ({ ...item }));
@@ -68,7 +77,15 @@ async function loadSchemaByConfigPath(schemaPathValue?: string): Promise<unknown
 
 async function validateConfigWithSchema(config: unknown, schemaPathValue?: string): Promise<Record<string, unknown>> {
     const schema = await loadSchemaByConfigPath(schemaPathValue);
-    const validate = ajv.compile<Record<string, unknown>>(schema as object);
+    const schemaForCompile = typeof schema === "object" && schema
+        ? { ...(schema as Record<string, unknown>) }
+        : schema;
+
+    if (schemaForCompile && typeof schemaForCompile === "object") {
+        delete (schemaForCompile as Record<string, unknown>).$id;
+    }
+
+    const validate = ajv.compile<Record<string, unknown>>(schemaForCompile as object);
     const valid = validate(config);
     if (!valid) {
         throw new Error(`ticket-options.default.json schema 校验失败: ${formatSchemaErrors(validate.errors)}`);
@@ -97,6 +114,70 @@ async function loadDefaultOptionsFromConfig(): Promise<TicketQueueOption[]> {
 
     const items = configRoot.items;
     return normalizeTicketOptions(items);
+}
+
+async function loadOptionsFromRawJson(rawJson: string): Promise<TicketQueueOption[]> {
+    const parsed = JSON.parse(rawJson) as unknown;
+
+    const configCandidate = Array.isArray(parsed)
+        ? ({ items: parsed } as Record<string, unknown>)
+        : parsed;
+
+    if (!configCandidate || typeof configCandidate !== "object") {
+        throw new Error("远程配置必须是对象，且包含 items 字段");
+    }
+
+    const schemaPathValue = typeof (configCandidate as Record<string, unknown>).$schema === "string"
+        ? (configCandidate as Record<string, unknown>).$schema as string
+        : undefined;
+    const configRoot = await validateConfigWithSchema(configCandidate, schemaPathValue);
+
+    return normalizeTicketOptions(configRoot.items);
+}
+
+function mergeByQueue(current: TicketQueueOption[], incoming: TicketQueueOption[]): TicketQueueOption[] {
+    const existingQueues = new Set(current.map((item) => item.queue));
+    const toAppend = incoming.filter((item) => !existingQueues.has(item.queue));
+    return [...current, ...toAppend];
+}
+
+async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+        controller.abort();
+    }, timeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Accept: "application/json,text/plain,*/*",
+            },
+            signal: controller.signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+        }
+
+        return await response.text();
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function fetchRemoteTicketOptionsRawJson(): Promise<string> {
+    const attempts: string[] = [];
+
+    for (const url of GITHUB_TICKET_OPTIONS_FALLBACK_URLS) {
+        try {
+            return await fetchTextWithTimeout(url, FETCH_TIMEOUT_MS);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            attempts.push(`${url} -> ${reason}`);
+        }
+    }
+
+    throw new Error(`同步 GitHub 配置失败，已尝试以下地址: ${attempts.join(" | ")}`);
 }
 
 @Injectable()
@@ -174,5 +255,17 @@ export class AppServiceTicketOptions {
             console.error("Failed to reset ticket options in store:", error);
             return [];
         }
+    }
+
+    public async syncFromGithub(mode: TicketOptionsSyncMode): Promise<TicketQueueOption[]> {
+        const rawText = await fetchRemoteTicketOptionsRawJson();
+        const remoteOptions = await loadOptionsFromRawJson(rawText);
+
+        const nextOptions = mode === "overwrite"
+            ? remoteOptions
+            : mergeByQueue(await this.get(), remoteOptions);
+
+        this.store.set("ticketOptions", nextOptions);
+        return nextOptions;
     }
 }
