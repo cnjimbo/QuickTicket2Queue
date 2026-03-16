@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import ts from 'typescript'
 import { fileURLToPath } from 'node:url'
@@ -75,6 +75,63 @@ function channelToMethodName(channel: string): string {
             return part.charAt(0).toUpperCase() + part.slice(1)
         })
         .join('')
+}
+
+function getScriptKind(filePath: string): ts.ScriptKind {
+    if (filePath.endsWith('.tsx')) return ts.ScriptKind.TSX
+    if (filePath.endsWith('.jsx')) return ts.ScriptKind.JSX
+    if (filePath.endsWith('.js')) return ts.ScriptKind.JS
+    return ts.ScriptKind.TS
+}
+
+function normalizeTsSource(filePath: string, content: string): string | undefined {
+    const sourceFile = ts.createSourceFile(
+        filePath,
+        content,
+        ts.ScriptTarget.Latest,
+        false,
+        getScriptKind(filePath),
+    )
+    const diagnostics = (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics
+
+    if (diagnostics && diagnostics.length > 0) {
+        return undefined
+    }
+
+    const printer = ts.createPrinter({
+        removeComments: true,
+        newLine: ts.NewLineKind.LineFeed,
+    })
+
+    return printer.printFile(sourceFile).trim()
+}
+
+function isSameTsBehavior(filePath: string, currentContent: string, nextContent: string): boolean {
+    const currentNormalized = normalizeTsSource(filePath, currentContent)
+    const nextNormalized = normalizeTsSource(filePath, nextContent)
+
+    if (currentNormalized && nextNormalized) {
+        return currentNormalized === nextNormalized
+    }
+
+    return currentContent === nextContent
+}
+
+function writeFileIfChanged(filePath: string, content: string): boolean {
+    try {
+        const currentContent = readFileSync(filePath, 'utf8')
+        if (isSameTsBehavior(filePath, currentContent, content)) {
+            return false
+        }
+    }
+    catch (error) {
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
+            throw error
+        }
+    }
+
+    writeFileSync(filePath, content, 'utf8')
+    return true
 }
 
 const configResult = ts.readConfigFile(tsconfigPath, ts.sys.readFile)
@@ -258,11 +315,13 @@ for (const item of channelBindings) {
 preloadLines.push('} as const')
 preloadLines.push('')
 
+const ipcMethodsContent = ipcMethodLines.join('\n')
 mkdirSync(dirname(ipcMethodsOutputPath), { recursive: true })
-writeFileSync(ipcMethodsOutputPath, ipcMethodLines.join('\n'), 'utf8')
+const ipcMethodsWritten = writeFileIfChanged(ipcMethodsOutputPath, ipcMethodsContent)
 
+const preloadApiContent = preloadLines.join('\n')
 mkdirSync(dirname(preloadApiOutputPath), { recursive: true })
-writeFileSync(preloadApiOutputPath, preloadLines.join('\n'), 'utf8')
+const preloadApiWritten = writeFileIfChanged(preloadApiOutputPath, preloadApiContent)
 
-console.log(`Generated IPC methods: ${ipcMethodsOutputPath}`)
-console.log(`Generated preload IPC API: ${preloadApiOutputPath}`)
+console.log(`${ipcMethodsWritten ? 'Generated' : 'Skipped'} IPC methods: ${ipcMethodsOutputPath}`)
+console.log(`${preloadApiWritten ? 'Generated' : 'Skipped'} preload IPC API: ${preloadApiOutputPath}`)
