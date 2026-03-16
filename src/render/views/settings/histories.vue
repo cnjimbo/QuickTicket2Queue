@@ -53,8 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAsyncState, useTimeoutFn } from '@vueuse/core'
-import { onMounted, ref } from 'vue'
+import { refAutoReset, useAsyncState } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import { useTicketStore } from '@render/stores/ticket'
 import { TicketHistoryItem } from '@/types/orm_types';
@@ -92,17 +91,14 @@ const ticketStore = useTicketStore()
 const { state: histories, isLoading: loading, execute: executeLoadHistories } = useAsyncState(
   () => window.electron.getTicketHistory(),
   [] as TicketHistoryItem[],
-  { immediate: false, resetOnExecute: false },
+  { immediate: true, resetOnExecute: false },
 )
 const { execute: executeClearHistories } = useAsyncState(
   () => window.electron.clearTicketHistory(),
   undefined,
   { immediate: false, resetOnExecute: false },
 )
-const successVisible = ref(false)
-const { start: startHideSuccessToast, stop: stopHideSuccessToast } = useTimeoutFn(() => {
-  successVisible.value = false
-}, 2500, { immediate: false })
+const successVisible = refAutoReset(false, 2500)
 
 const getRowKey = (row: TicketHistoryItem) => {
   return `${row.result.sys_id}-${row.result.createTime ?? ''}`
@@ -114,8 +110,6 @@ const loadHistories = async () => {
 
 const showSuccess = () => {
   successVisible.value = true
-  stopHideSuccessToast()
-  startHideSuccessToast()
 }
 
 const handleClear = () => {
@@ -159,7 +153,6 @@ const copyTicket = async (history: TicketHistoryItem) => {
   })
 }
 
-onMounted(loadHistories)
 </script>
 
 <style scoped>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useAsyncState, useTimeoutFn } from '@vueuse/core'
+import { refAutoReset, useAsyncState } from '@vueuse/core'
 import { computed, reactive, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
@@ -24,8 +24,7 @@ definePage({
 
 const options = ref<TicketQueueOption[]>([])
 const ticketStore = useTicketStore()
-const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges } = storeToRefs(ticketStore)
-const isSubmitting = ref(false);
+const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges, isSubmitting } = storeToRefs(ticketStore)
 const current = reactive<CredentialItem>({
     env: 'pfetst',
 })
@@ -146,15 +145,10 @@ const enableSubmitBtn = computed(() => {
 
 })
 
-const submitErrorMessage = ref('')
-const { start: startHideSubmitError, stop: stopHideSubmitError } = useTimeoutFn(() => {
-    submitErrorMessage.value = ''
-}, 2500, { immediate: false })
+const submitErrorMessage = refAutoReset('', 2500)
 
 function showSubmitError(message: string) {
     submitErrorMessage.value = message
-    stopHideSubmitError()
-    startHideSubmitError()
 }
 
 async function submitTicket() {
@@ -218,7 +212,7 @@ const goCredentialSetting = async () => {
         <div style="margin-bottom: 8px; font-weight: 600;"></div>
 
         <el-link :href="link.href" target="_blank" @click.prevent="electron.openLink(link.href)">{{ link.txt
-        }}</el-link>
+            }}</el-link>
     </el-card>
 </div>
 </template>

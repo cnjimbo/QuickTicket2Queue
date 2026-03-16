@@ -51,8 +51,8 @@
 </template>
 
 <script setup lang="ts">
-import { useAsyncState, useTimeoutFn } from '@vueuse/core'
-import { onMounted, reactive, ref } from 'vue'
+import { refAutoReset, useAsyncState } from '@vueuse/core'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { TicketQueueOption } from '@/types/orm_types'
 import { showNativeDialog } from '@render/utils/native-dialog'
@@ -72,7 +72,7 @@ const router = useRouter()
 const { state: options, isLoading: loading, execute: executeLoadOptions } = useAsyncState(
     () => window.electron.getTicketOptions(),
     [] as TicketQueueOption[],
-    { immediate: false, resetOnExecute: false },
+    { immediate: true, resetOnExecute: false },
 )
 const { isLoading: adding, execute: executeAddOption } = useAsyncState(
     ({ des, queue }: { des: string, queue: string }) => window.electron.addTicketOption({ des, queue }),
@@ -100,17 +100,12 @@ const newOption = reactive<TicketQueueOption>({
     queue: '',
 })
 
-const noticeText = ref('')
+const noticeText = refAutoReset('', 2500)
 const noticeType = ref<'success' | 'error'>('success')
-const { start: startHideNotice, stop: stopHideNotice } = useTimeoutFn(() => {
-    noticeText.value = ''
-}, 2500, { immediate: false })
 
 function showNotice(type: 'success' | 'error', text: string) {
     noticeType.value = type
     noticeText.value = text
-    stopHideNotice()
-    startHideNotice()
 }
 
 const loadOptions = async () => {
@@ -208,7 +203,6 @@ const jumpToTicket = async (queue: string) => {
     await router.push({ path: '/ticket/ticket', query: { queue } })
 }
 
-onMounted(loadOptions)
 </script>
 
 <style scoped>

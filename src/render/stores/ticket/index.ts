@@ -1,5 +1,10 @@
 import { defineStore } from "pinia";
-import { useAsyncState, useStorage } from "@vueuse/core";
+import {
+  StorageSerializers,
+  useAsyncState,
+  useSessionStorage,
+  useStorage,
+} from "@vueuse/core";
 import { TicketResponse, TicketType } from "@/types/orm_types";
 import { computed, reactive, ref, toRaw } from "vue";
 
@@ -22,6 +27,7 @@ const createEmptyValidationMessages = (): ValidationMessages => ({
 
 const requiredFields: FieldKey[] = ["userName", "title", "content"];
 const TICKET_DRAFT_STORAGE_KEY = "quickticket2queue:ticket-draft:v1";
+const HISTORY_COPY_PAYLOAD_KEY = "quickticket2queue:history-copy-payload:v1";
 
 type TicketDraftCache = Pick<TicketType, "title" | "content" | "queue_val">;
 
@@ -43,7 +49,11 @@ export const useTicketStore = defineStore("ticket", () => {
   );
   const result = ref<TicketResponse>();
   const suppressDraftPersistence = ref(false);
-  const historyCopyPayload = ref<Partial<TicketType> | null>(null);
+  const historyCopyPayload = useSessionStorage<Partial<TicketType> | null>(
+    HISTORY_COPY_PAYLOAD_KEY,
+    null,
+    { serializer: StorageSerializers.object },
+  );
   const draftBaselineSnapshot = ref(JSON.stringify(createEmptyDraft()));
   const draftCache = useStorage<TicketDraftCache>(
     TICKET_DRAFT_STORAGE_KEY,
