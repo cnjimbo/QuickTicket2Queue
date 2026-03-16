@@ -6,6 +6,17 @@ export default {
   ...ipcInvoke,
   sendMsg: ipcInvoke.msg,
   readCredential: ipcInvoke.readCredential,
+  onAppCloseRequested: (cb: () => void | Promise<void>) => {
+    const listener = () => {
+      void cb();
+    };
+    ipcRenderer.on("app-close-requested", listener);
+    return () => {
+      ipcRenderer.off("app-close-requested", listener);
+    };
+  },
+  respondToAppCloseRequest: (shouldClose: boolean) =>
+    ipcRenderer.invoke("confirm-app-close", shouldClose) as Promise<boolean>,
   onTopToolbarVisibilityChanged: (cb: (visible: boolean) => void) => {
     const listener = (...args: [unknown, boolean]) => {
       cb(args[1]);

@@ -68,9 +68,13 @@ export const useTicketStore = defineStore("ticket", () => {
   const isSubmitting = ref(false);
   const suppressDraftPersistence = ref(false);
   const historyCopyPayload = ref<Partial<TicketType> | null>(null);
+  const draftBaselineSnapshot = ref(JSON.stringify(createEmptyDraft()));
 
   const isFormValid = computed(() =>
     requiredFields.every((field) => (ticket[field] ?? "").trim().length > 0),
+  );
+  const hasUnsavedDraftChanges = computed(
+    () => JSON.stringify(getTicketDraftSnapshot()) !== draftBaselineSnapshot.value,
   );
 
   const resetValidationMessages = () => {
@@ -89,6 +93,10 @@ export const useTicketStore = defineStore("ticket", () => {
 
   const saveTicketDraft = () => {
     writeDraftToStorage(getTicketDraftSnapshot());
+  };
+
+  const refreshDraftBaseline = () => {
+    draftBaselineSnapshot.value = JSON.stringify(getTicketDraftSnapshot());
   };
 
   const setTicketFieldsWithoutDraft = (fields: Partial<TicketType>) => {
@@ -194,9 +202,11 @@ export const useTicketStore = defineStore("ticket", () => {
     result,
     isSubmitting,
     isFormValid,
+    hasUnsavedDraftChanges,
     setTicketField,
     getTicketDraftSnapshot,
     saveTicketDraft,
+    refreshDraftBaseline,
     setTicketFieldsWithoutDraft,
     setHistoryCopyPayload,
     consumeHistoryCopyPayload,

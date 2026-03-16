@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, onMounted, onUnmounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
 
@@ -22,37 +22,31 @@ definePage({
 
 const options = ref<TicketQueueOption[]>([])
 const ticketStore = useTicketStore()
-const { ticket, validationMessages, isFormValid, result } = storeToRefs(ticketStore)
+const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges } = storeToRefs(ticketStore)
 const isSubmitting = ref(false);
 const current = reactive<CredentialItem>({
     env: 'pfetst',
 })
 const credentialReady = ref(true)
-const hasSubmittedSuccessfully = ref(false)
-const baselineDraftSnapshot = ref('')
-
-const serializeDraftSnapshot = () => JSON.stringify(ticketStore.getTicketDraftSnapshot())
-
-const refreshDraftBaseline = () => {
-    baselineDraftSnapshot.value = serializeDraftSnapshot()
-}
-
-const hasDraftChanged = computed(() => {
-    return serializeDraftSnapshot() !== baselineDraftSnapshot.value
-})
 
 const shouldPromptDraftSave = computed(() => {
-    return !hasSubmittedSuccessfully.value && hasDraftChanged.value
+    return hasUnsavedDraftChanges.value
 })
 
-const handleBeforeUnload = () => {
-    if (!shouldPromptDraftSave.value) return
+const getDraftLeaveDecision = (actionLabel: string) => {
+    if (!shouldPromptDraftSave.value) {
+        return 'allow'
+    }
 
-    const shouldSave = window.confirm('当前工单内容已修改，是否在退出前保存到缓存？\n点击“确定”保存并退出，点击“取消”不保存直接退出。')
+    const shouldSave = window.confirm(`当前工单内容已修改，是否保存到缓存后再${actionLabel}？\n点击“确定”保存并${actionLabel}，点击“取消”进入下一步确认。`)
     if (shouldSave) {
         ticketStore.saveTicketDraft()
-        refreshDraftBaseline()
+        ticketStore.refreshDraftBaseline()
+        return 'allow'
     }
+
+    const shouldDiscard = window.confirm(`不保存会丢失本次修改，是否继续${actionLabel}？\n点击“确定”不保存直接${actionLabel}，点击“取消”留在当前页面。`)
+    return shouldDiscard ? 'allow' : 'stay'
 }
 
 onMounted(async () => {
@@ -110,32 +104,16 @@ onMounted(async () => {
         })
     }
 
-    refreshDraftBaseline()
-    window.addEventListener('beforeunload', handleBeforeUnload)
-})
-
-onUnmounted(() => {
-    window.removeEventListener('beforeunload', handleBeforeUnload)
+    ticketStore.refreshDraftBaseline()
 })
 
 onBeforeRouteLeave(async () => {
-    if (!shouldPromptDraftSave.value) {
+    const decision = getDraftLeaveDecision('离开')
+    if (decision === 'allow') {
         return true
     }
 
-    const shouldSave = window.confirm('当前工单内容已修改，是否保存到缓存后再离开？\n点击“确定”保存并离开，点击“取消”进入下一步确认。')
-    if (shouldSave) {
-        ticketStore.saveTicketDraft()
-        refreshDraftBaseline()
-        return true
-    }
-
-    const shouldDiscardAndLeave = window.confirm('不保存会丢失本次修改，是否继续离开？\n点击“确定”不保存直接离开，点击“取消”留在当前页面。')
-    if (shouldDiscardAndLeave) {
-        return true
-    }
-
-    return false
+    return !shouldPromptDraftSave.value
 })
 
 const querySearch = (query: string, cb: (results: TicketQueueOption[]) => void) =>
@@ -181,8 +159,7 @@ async function submitTicket() {
         return
     }
 
-    hasSubmittedSuccessfully.value = true
-    refreshDraftBaseline()
+    ticketStore.refreshDraftBaseline()
 }
 
 const goCredentialSetting = async () => {

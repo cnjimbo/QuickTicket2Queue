@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useTicketStore } from '@render/stores/ticket'
 
 const router = useRouter()
 const route = useRoute()
+const ticketStore = useTicketStore()
+const { hasUnsavedDraftChanges } = storeToRefs(ticketStore)
 const showTopToolbar = ref(import.meta.env.DEV)
 const devUrlInput = ref('')
+const skipBeforeUnloadPrompt = ref(false)
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
+let stopAppCloseSync: (() => void) | undefined
+
+const shouldPromptDraftSave = computed(() => hasUnsavedDraftChanges.value)
 
 function syncDevUrlInput() {
   devUrlInput.value = window.location.href
@@ -73,6 +81,40 @@ function handleGlobalKeydown(event: KeyboardEvent) {
   }
 }
 
+function getDraftLeaveDecision(actionLabel: string) {
+  if (!shouldPromptDraftSave.value) {
+    return 'allow'
+  }
+
+  const shouldSave = window.confirm(`当前工单内容已修改，是否保存到缓存后再${actionLabel}？\n点击“确定”保存并${actionLabel}，点击“取消”进入下一步确认。`)
+  if (shouldSave) {
+    ticketStore.saveTicketDraft()
+    ticketStore.refreshDraftBaseline()
+    return 'allow'
+  }
+
+  const shouldDiscard = window.confirm(`不保存会丢失本次修改，是否继续${actionLabel}？\n点击“确定”不保存直接${actionLabel}，点击“取消”留在当前页面。`)
+  return shouldDiscard ? 'allow' : 'stay'
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (skipBeforeUnloadPrompt.value || !shouldPromptDraftSave.value) return
+
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+async function handleAppCloseRequested() {
+  const decision = getDraftLeaveDecision('退出程序')
+  if (decision !== 'allow') {
+    await window.electron.respondToAppCloseRequest(false)
+    return
+  }
+
+  skipBeforeUnloadPrompt.value = true
+  await window.electron.respondToAppCloseRequest(true)
+}
+
 onMounted(() => {
   syncDevUrlInput()
   stopRouteSync = router.afterEach(() => {
@@ -85,16 +127,21 @@ onMounted(() => {
       syncDevUrlInput()
     }
   })
+  stopAppCloseSync = window.electron.onAppCloseRequested(handleAppCloseRequested)
 
   window.addEventListener('popstate', syncDevUrlInput)
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 onBeforeUnmount(() => {
   stopRouteSync?.()
   stopTopToolbarSync?.()
+  stopAppCloseSync?.()
   window.removeEventListener('popstate', syncDevUrlInput)
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  skipBeforeUnloadPrompt.value = false
 })
 
 
