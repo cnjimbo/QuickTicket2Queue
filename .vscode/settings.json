@@ -1,5 +1,18 @@
 {
     "task.allowAutomaticTasks": "on",
+    "terminal.integrated.defaultProfile.windows": "PowerShell UTF-8",
+    "terminal.integrated.profiles.windows": {
+        "PowerShell UTF-8": {
+            "source": "PowerShell",
+            "args": [
+                "-NoExit",
+                "-Command",
+                "chcp 65001 > $null; [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false)"
+            ]
+        }
+    },
+    "terminal.integrated.fontFamily": "Cascadia Mono, Segoe UI Emoji",
+    "terminal.integrated.unicodeVersion": "11",
     "eslint.validate": [
         "javascript",
         "javascriptreact",

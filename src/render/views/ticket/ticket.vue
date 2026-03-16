@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useRouter } from 'vue-router'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
 
 import { storeToRefs } from 'pinia'
 import { useTicketStore, fieldLabels } from '@render/stores/ticket'
@@ -28,6 +28,32 @@ const current = reactive<CredentialItem>({
     env: 'pfetst',
 })
 const credentialReady = ref(true)
+const hasSubmittedSuccessfully = ref(false)
+const baselineDraftSnapshot = ref('')
+
+const serializeDraftSnapshot = () => JSON.stringify(ticketStore.getTicketDraftSnapshot())
+
+const refreshDraftBaseline = () => {
+    baselineDraftSnapshot.value = serializeDraftSnapshot()
+}
+
+const hasDraftChanged = computed(() => {
+    return serializeDraftSnapshot() !== baselineDraftSnapshot.value
+})
+
+const shouldPromptDraftSave = computed(() => {
+    return !hasSubmittedSuccessfully.value && hasDraftChanged.value
+})
+
+const handleBeforeUnload = () => {
+    if (!shouldPromptDraftSave.value) return
+
+    const shouldSave = window.confirm('当前工单内容已修改，是否在退出前保存到缓存？\n点击“确定”保存并退出，点击“取消”不保存直接退出。')
+    if (shouldSave) {
+        ticketStore.saveTicketDraft()
+        refreshDraftBaseline()
+    }
+}
 
 onMounted(async () => {
     ticketStore.hydrateTicketDraft()
@@ -51,6 +77,65 @@ onMounted(async () => {
     if (typeof queueValue === 'string' && queueValue.trim()) {
         ticketStore.setTicketField('queue_val', queueValue.trim())
     }
+
+    const fromHistoryCopy = route.query.fromHistoryCopy
+    const isHistoryCopy = Array.isArray(fromHistoryCopy)
+        ? fromHistoryCopy.includes('1')
+        : fromHistoryCopy === '1'
+
+    if (isHistoryCopy) {
+        const copyPayload = ticketStore.consumeHistoryCopyPayload()
+        if (copyPayload) {
+            ticketStore.setTicketFieldsWithoutDraft(copyPayload)
+            return
+        }
+
+        const queryUserName = route.query.copyUserName
+        const copyUserName = typeof queryUserName === 'string' ? queryUserName : ''
+
+        const queryTitle = route.query.copyTitle
+        const copyTitle = typeof queryTitle === 'string' ? queryTitle : ''
+
+        const queryContent = route.query.copyContent
+        const copyContent = typeof queryContent === 'string' ? queryContent : ''
+
+        const queryQueueVal = route.query.copyQueueVal
+        const copyQueueVal = typeof queryQueueVal === 'string' ? queryQueueVal : ''
+
+        ticketStore.setTicketFieldsWithoutDraft({
+            userName: copyUserName,
+            title: copyTitle,
+            content: copyContent,
+            queue_val: copyQueueVal,
+        })
+    }
+
+    refreshDraftBaseline()
+    window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeRouteLeave(async () => {
+    if (!shouldPromptDraftSave.value) {
+        return true
+    }
+
+    const shouldSave = window.confirm('当前工单内容已修改，是否保存到缓存后再离开？\n点击“确定”保存并离开，点击“取消”进入下一步确认。')
+    if (shouldSave) {
+        ticketStore.saveTicketDraft()
+        refreshDraftBaseline()
+        return true
+    }
+
+    const shouldDiscardAndLeave = window.confirm('不保存会丢失本次修改，是否继续离开？\n点击“确定”不保存直接离开，点击“取消”留在当前页面。')
+    if (shouldDiscardAndLeave) {
+        return true
+    }
+
+    return false
 })
 
 const querySearch = (query: string, cb: (results: TicketQueueOption[]) => void) =>
@@ -93,7 +178,11 @@ async function submitTicket() {
     const errorMessage = await ticketStore.submitTicket()
     if (errorMessage) {
         showSubmitError(errorMessage)
+        return
     }
+
+    hasSubmittedSuccessfully.value = true
+    refreshDraftBaseline()
 }
 
 const goCredentialSetting = async () => {

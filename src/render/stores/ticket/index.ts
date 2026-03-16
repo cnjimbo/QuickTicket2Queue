@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { TicketResponse, TicketType } from "@/types/orm_types";
-import { computed, reactive, ref, toRaw, watch } from "vue";
+import { computed, reactive, ref, toRaw } from "vue";
 
 export const fieldLabels = {
   userName: "工单提交人",
@@ -66,6 +66,8 @@ export const useTicketStore = defineStore("ticket", () => {
   );
   const result = ref<TicketResponse>();
   const isSubmitting = ref(false);
+  const suppressDraftPersistence = ref(false);
+  const historyCopyPayload = ref<Partial<TicketType> | null>(null);
 
   const isFormValid = computed(() =>
     requiredFields.every((field) => (ticket[field] ?? "").trim().length > 0),
@@ -77,6 +79,50 @@ export const useTicketStore = defineStore("ticket", () => {
 
   const setTicketField = (field: FieldKey, value: string) => {
     ticket[field] = value;
+  };
+
+  const getTicketDraftSnapshot = (): TicketDraftCache => ({
+    title: ticket.title ?? "",
+    content: ticket.content ?? "",
+    queue_val: ticket.queue_val ?? "",
+  });
+
+  const saveTicketDraft = () => {
+    writeDraftToStorage(getTicketDraftSnapshot());
+  };
+
+  const setTicketFieldsWithoutDraft = (fields: Partial<TicketType>) => {
+    suppressDraftPersistence.value = true;
+    if (typeof fields.userName === "string") {
+      ticket.userName = fields.userName;
+    }
+    if (typeof fields.title === "string") {
+      ticket.title = fields.title;
+    }
+    if (typeof fields.content === "string") {
+      ticket.content = fields.content;
+    }
+    if (typeof fields.queue_val === "string") {
+      ticket.queue_val = fields.queue_val;
+    }
+    suppressDraftPersistence.value = false;
+  };
+
+  const setHistoryCopyPayload = (fields: Partial<TicketType>) => {
+    historyCopyPayload.value = {
+      userName:
+        typeof fields.userName === "string" ? fields.userName : undefined,
+      title: typeof fields.title === "string" ? fields.title : undefined,
+      content: typeof fields.content === "string" ? fields.content : undefined,
+      queue_val:
+        typeof fields.queue_val === "string" ? fields.queue_val : undefined,
+    };
+  };
+
+  const consumeHistoryCopyPayload = () => {
+    const payload = historyCopyPayload.value;
+    historyCopyPayload.value = null;
+    return payload;
   };
 
   const hydrateTicketDraft = () => {
@@ -126,11 +172,7 @@ export const useTicketStore = defineStore("ticket", () => {
       // console.log("🚀 ~ submitTicket ~ isSubmitting:", isSubmitting.value);
       setResult();
       const payload = toRaw(ticket);
-      writeDraftToStorage({
-        title: payload.title ?? "",
-        content: payload.content ?? "",
-        queue_val: payload.queue_val ?? "",
-      });
+      saveTicketDraft();
 
       // console.log("Submitting ticket:", payload, "Queue:", payload.queue_val);
       const res = await window.electron.ticket(payload); //typedInvoke(ipcChannels.ticket, payload)
@@ -146,18 +188,6 @@ export const useTicketStore = defineStore("ticket", () => {
     return undefined;
   };
 
-  watch(
-    () => ({
-      title: ticket.title,
-      content: ticket.content,
-      queue_val: ticket.queue_val,
-    }),
-    (draft) => {
-      writeDraftToStorage(draft);
-    },
-    { deep: true },
-  );
-
   return {
     ticket,
     validationMessages,
@@ -165,6 +195,11 @@ export const useTicketStore = defineStore("ticket", () => {
     isSubmitting,
     isFormValid,
     setTicketField,
+    getTicketDraftSnapshot,
+    saveTicketDraft,
+    setTicketFieldsWithoutDraft,
+    setHistoryCopyPayload,
+    consumeHistoryCopyPayload,
     hydrateTicketDraft,
     clearTicketDraft,
     resetValidationMessages,

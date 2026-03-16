@@ -1,12 +1,19 @@
 import { app } from "electron";
 
+interface BuildMenuTemplateOptions {
+  showTopToolbar: boolean;
+  onToggleTopToolbar: (visible: boolean) => void;
+}
+
 /**
  * Builds the application menu template.
  * This function can be extended to support i18n and custom menu configurations.
  *
  * @returns Menu template array for Electron
  */
-export function buildMenuTemplate(): Electron.MenuItemConstructorOptions[] {
+export function buildMenuTemplate(
+  options: BuildMenuTemplateOptions,
+): Electron.MenuItemConstructorOptions[] {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: "File",
@@ -31,6 +38,15 @@ export function buildMenuTemplate(): Electron.MenuItemConstructorOptions[] {
     {
       label: "View",
       submenu: [
+        {
+          label: "显示顶部导航栏",
+          type: "checkbox",
+          checked: options.showTopToolbar,
+          click: (menuItem) => {
+            options.onToggleTopToolbar(Boolean(menuItem.checked));
+          },
+        },
+        { type: "separator" },
         { role: "reload" },
         { role: "forceReload" },
         { role: "toggleDevTools" },

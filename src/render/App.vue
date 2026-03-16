@@ -4,9 +4,10 @@ import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
-const showDevAddressBar = import.meta.env.DEV
+const showTopToolbar = ref(import.meta.env.DEV)
 const devUrlInput = ref('')
 let stopRouteSync: (() => void) | undefined
+let stopTopToolbarSync: (() => void) | undefined
 
 function syncDevUrlInput() {
   devUrlInput.value = window.location.href
@@ -64,7 +65,7 @@ function reloadPage() {
 }
 
 function handleGlobalKeydown(event: KeyboardEvent) {
-  if (!showDevAddressBar) return
+  if (!showTopToolbar.value) return
 
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
     event.preventDefault()
@@ -73,18 +74,25 @@ function handleGlobalKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  if (!showDevAddressBar) return
-
   syncDevUrlInput()
   stopRouteSync = router.afterEach(() => {
     syncDevUrlInput()
   })
+
+  stopTopToolbarSync = window.electron.onTopToolbarVisibilityChanged((visible) => {
+    showTopToolbar.value = visible
+    if (visible) {
+      syncDevUrlInput()
+    }
+  })
+
   window.addEventListener('popstate', syncDevUrlInput)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 onBeforeUnmount(() => {
   stopRouteSync?.()
+  stopTopToolbarSync?.()
   window.removeEventListener('popstate', syncDevUrlInput)
   window.removeEventListener('keydown', handleGlobalKeydown)
 })
@@ -106,7 +114,7 @@ const navLinks = computed(() => {
 
 <template>
 <div class="app-root">
-  <div v-if="showDevAddressBar" class="dev-urlbar">
+  <div v-if="showTopToolbar" class="dev-urlbar">
     <button type="button" class="dev-urlbar__btn" @click="goBack">Back</button>
     <button type="button" class="dev-urlbar__btn" @click="goForward">Forward</button>
     <button type="button" class="dev-urlbar__btn" @click="reloadPage">Reload</button>
@@ -115,7 +123,7 @@ const navLinks = computed(() => {
     <button type="button" class="dev-urlbar__btn is-primary" @click="navigateByDevUrlInput">Go</button>
   </div>
 
-  <div class="app-shell" :class="{ 'with-dev-urlbar': showDevAddressBar }">
+  <div class="app-shell" :class="{ 'with-dev-urlbar': showTopToolbar }">
     <aside class="nav-panel">
       <div class="nav-brand">
         <p class="eyebrow">Quick Ticket to Queue</p>

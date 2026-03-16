@@ -1,7 +1,7 @@
 import type { MicroserviceOptions } from "@nestjs/microservices";
 import { ElectronIpcTransport } from "@doubleshot/nest-electron";
 import { NestFactory } from "@nestjs/core";
-import { app, dialog, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { AppModule } from "./app.module";
 import { buildMenuTemplate } from "./buildMenuTemplate";
@@ -9,6 +9,14 @@ import 'reflect-metadata';
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 
 const DEFAULT_GITHUB_REPOSITORY = "cnjimbo/QuickTicket2Queue";
+const TOP_TOOLBAR_VISIBILITY_CHANNEL = "top-toolbar-visibility-changed";
+let showTopToolbar = false;
+
+function broadcastTopToolbarVisibility(visible: boolean): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(TOP_TOOLBAR_VISIBILITY_CHANNEL, visible);
+  }
+}
 
 function isPortableWindowsBuild(): boolean {
   return process.platform === "win32" && Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
@@ -84,6 +92,7 @@ function setupAutoUpdater() {
 
 async function electronAppInit() {
   const isPackaged = app.isPackaged;
+  showTopToolbar = !isPackaged;
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
@@ -102,7 +111,13 @@ async function electronAppInit() {
 
   if (!isPackaged) {
     // Build application menu with configurable labels
-    const menuTemplate = buildMenuTemplate();
+    const menuTemplate = buildMenuTemplate({
+      showTopToolbar,
+      onToggleTopToolbar: (visible) => {
+        showTopToolbar = visible;
+        broadcastTopToolbarVisibility(visible);
+      },
+    });
     const menu = Menu.buildFromTemplate(menuTemplate);
     Menu.setApplicationMenu(menu);
   } else {
@@ -110,6 +125,11 @@ async function electronAppInit() {
   }
 
   await app.whenReady();
+  app.on("browser-window-created", (_, window) => {
+    window.webContents.on("did-finish-load", () => {
+      window.webContents.send(TOP_TOOLBAR_VISIBILITY_CHANNEL, showTopToolbar);
+    });
+  });
   setupAutoUpdater();
 }
 

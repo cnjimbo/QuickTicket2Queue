@@ -30,12 +30,17 @@
     <el-table-column label="单号" min-width="140" show-overflow-tooltip>
       <template #default="{ row }">
         <el-link type="primary" @click.prevent="openRecord(row.result.ticket_link)">{{ row.result.display_value
-          }}</el-link>
+        }}</el-link>
       </template>
     </el-table-column>
     <el-table-column label="时间" min-width="140">
       <template #default="{ row }">
         {{ row.result.createTime }}
+      </template>
+    </el-table-column>
+    <el-table-column label="操作" width="150" fixed="right">
+      <template #default="{ row }">
+        <el-button type="primary" text @click="copyTicket(row)">copy ticket</el-button>
       </template>
     </el-table-column>
 
@@ -47,6 +52,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
+import { useTicketStore } from '@render/stores/ticket'
 import { TicketHistoryItem } from '@/types/orm_types';
 
 definePage({
@@ -88,6 +95,8 @@ const getTxt = (ticket: TicketHistoryItem): "pfetst" | "pfestg" | "pfeprod" => {
 const histories = ref<TicketHistoryItem[]>([])
 const loading = ref(false)
 const clearDialogVisible = ref(false)
+const router = useRouter()
+const ticketStore = useTicketStore()
 
 const getRowKey = (row: TicketHistoryItem) => {
   return `${row.result.sys_id}-${row.result.createTime ?? ''}`
@@ -115,6 +124,26 @@ const handleClear = () => {
 
 const openRecord = (url: string) => {
   window.electron.openLink(url)
+}
+
+const copyTicket = async (history: TicketHistoryItem) => {
+  ticketStore.setHistoryCopyPayload({
+    userName: history.ticket.userName ?? '',
+    title: history.ticket.title ?? '',
+    content: history.ticket.content ?? '',
+    queue_val: history.ticket.queue_val ?? '',
+  })
+
+  await router.push({
+    path: '/ticket/ticket',
+    query: {
+      fromHistoryCopy: '1',
+      copyUserName: history.ticket.userName ?? '',
+      copyTitle: history.ticket.title ?? '',
+      copyContent: history.ticket.content ?? '',
+      copyQueueVal: history.ticket.queue_val ?? '',
+    },
+  })
 }
 
 onMounted(loadHistories)
