@@ -59,11 +59,15 @@ pnpm install
 pnpm dev
 ```
 
+执行前会先自动运行 `pnpm install`。
+
 ### 调试模式
 
 ```bash
 pnpm debug
 ```
+
+执行前会先自动运行 `pnpm install`。
 
 ### 构建
 
@@ -71,10 +75,18 @@ pnpm debug
 pnpm build
 ```
 
+构建前会自动生成 IPC 类型。
+
 ### 代码检查
 
 ```bash
 pnpm lint
+```
+
+如需同时做 ESLint 和 TypeScript 类型检查：
+
+```bash
+pnpm check
 ```
 
 ## 打包
@@ -82,7 +94,7 @@ pnpm lint
 生成 Windows portable 包：
 
 ```bash
-pnpm pack:win:portable
+electron-builder --win portable
 ```
 
 打包输出目录默认在 `build/`。
@@ -108,12 +120,15 @@ pnpm pack:win:portable
 
 ```bash
 pnpm gen:ipc            # 生成 IPC 类型与方法映射
+pnpm gen:favicon        # 生成打包图标资源
+pnpm clean              # 清理 dist 目录
 pnpm dev                # 启动开发环境
 pnpm debug              # 启动调试模式
 pnpm build              # 构建应用
-pnpm pack:win:portable  # 打包 Windows portable 版本
 pnpm lint               # 运行 ESLint
 pnpm lint:fix           # 自动修复部分 ESLint 问题
+pnpm typecheck          # 运行 TypeScript 类型检查
+pnpm check              # 运行 lint + typecheck
 ```
 
 ## 注意事项
