@@ -251,7 +251,7 @@ const navLinks = computed(() => {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 180px 1fr;
   height: 98vh;
   width: 99vw;
 }
@@ -262,49 +262,49 @@ const navLinks = computed(() => {
 
 .nav-panel {
   background: linear-gradient(180deg, #0f172a 0%, #111827 70%);
-  padding: 32px 24px;
+  padding: 16px 10px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 16px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 
 }
 
 .nav-brand h1 {
-  margin: 8px 0 4px;
-  font-size: 24px;
+  margin: 6px 0 2px;
+  font-size: 22px;
   color: #ffffff;
 }
 
 .nav-subtitle {
   margin: 0;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 12px;
+  letter-spacing: 0.14em;
+  font-size: 11px;
   color: #94a3b8;
 }
 
 .nav-links {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 .nav-link {
-  border-radius: 16px;
-  padding: 16px;
+  border-radius: 14px;
+  padding: 10px;
   text-decoration: none;
   color: #d9e3ff;
   background: rgba(148, 163, 184, 0.08);
   border: 1px solid rgba(148, 163, 184, 0.2);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   transition: all 0.2s ease;
 }
 
@@ -331,10 +331,10 @@ const navLinks = computed(() => {
 
 .display-panel {
   background: #f5f7fb;
-  padding: 40px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
 }
 
 .display-header {
@@ -353,8 +353,8 @@ const navLinks = computed(() => {
 .display-body {
   flex: 1;
   background: #ffffff;
-  border-radius: 32px;
-  padding: 32px;
+  border-radius: 24px;
+  padding: 18px;
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.08);
   min-height: 0;
 }
@@ -366,7 +366,7 @@ const navLinks = computed(() => {
 .empty-state {
   text-align: center;
   color: #475569;
-  padding: 96px 24px;
+  padding: 64px 16px;
 }
 
 .empty-state h3 {
