@@ -66,11 +66,17 @@ const config: Configuration = {
   ...getPublishConfig(),
   npmRebuild: true,
   win: {
-    target: ["portable"],
+    target: ["nsis", "zip"],
     executableName: "quickticket2queue",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
     signAndEditExecutable: !shouldDisableWindowsSigning,
     icon: "assets/icons/icon-512.png",
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: false,
   },
   mac: {
     target: ["zip"],

@@ -1,4 +1,10 @@
 import { defineStore } from "pinia";
+import {
+  StorageSerializers,
+  useAsyncState,
+  useSessionStorage,
+  useStorage,
+} from "@vueuse/core";
 import { TicketResponse, TicketType } from "@/types/orm_types";
 import { computed, reactive, ref, toRaw } from "vue";
 
@@ -21,6 +27,7 @@ const createEmptyValidationMessages = (): ValidationMessages => ({
 
 const requiredFields: FieldKey[] = ["userName", "title", "content"];
 const TICKET_DRAFT_STORAGE_KEY = "quickticket2queue:ticket-draft:v1";
+const HISTORY_COPY_PAYLOAD_KEY = "quickticket2queue:history-copy-payload:v1";
 
 type TicketDraftCache = Pick<TicketType, "title" | "content" | "queue_val">;
 
@@ -29,30 +36,6 @@ const createEmptyDraft = (): TicketDraftCache => ({
   content: "",
   queue_val: "",
 });
-
-function readDraftFromStorage(): TicketDraftCache | null {
-  try {
-    const raw = window.localStorage.getItem(TICKET_DRAFT_STORAGE_KEY);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as Partial<TicketDraftCache>;
-    return {
-      title: String(parsed.title ?? ""),
-      content: String(parsed.content ?? ""),
-      queue_val: String(parsed.queue_val ?? ""),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeDraftToStorage(draft: TicketDraftCache): void {
-  try {
-    window.localStorage.setItem(TICKET_DRAFT_STORAGE_KEY, JSON.stringify(draft));
-  } catch {
-    // Ignore storage write errors (quota, privacy mode, etc.)
-  }
-}
 
 export const useTicketStore = defineStore("ticket", () => {
   const ticket = reactive<TicketType>({
@@ -65,10 +48,23 @@ export const useTicketStore = defineStore("ticket", () => {
     createEmptyValidationMessages(),
   );
   const result = ref<TicketResponse>();
-  const isSubmitting = ref(false);
   const suppressDraftPersistence = ref(false);
-  const historyCopyPayload = ref<Partial<TicketType> | null>(null);
+  const historyCopyPayload = useSessionStorage<Partial<TicketType> | null>(
+    HISTORY_COPY_PAYLOAD_KEY,
+    null,
+    { serializer: StorageSerializers.object },
+  );
   const draftBaselineSnapshot = ref(JSON.stringify(createEmptyDraft()));
+  const draftCache = useStorage<TicketDraftCache>(
+    TICKET_DRAFT_STORAGE_KEY,
+    createEmptyDraft(),
+    localStorage,
+  );
+  const { execute: executeSubmitTicket, isLoading: isSubmitting } = useAsyncState(
+    (payload: TicketType) => window.electron.ticket(payload),
+    undefined as TicketResponse | undefined,
+    { immediate: false, resetOnExecute: false },
+  );
 
   const isFormValid = computed(() =>
     requiredFields.every((field) => (ticket[field] ?? "").trim().length > 0),
@@ -92,7 +88,7 @@ export const useTicketStore = defineStore("ticket", () => {
   });
 
   const saveTicketDraft = () => {
-    writeDraftToStorage(getTicketDraftSnapshot());
+    draftCache.value = getTicketDraftSnapshot();
   };
 
   const refreshDraftBaseline = () => {
@@ -134,7 +130,7 @@ export const useTicketStore = defineStore("ticket", () => {
   };
 
   const hydrateTicketDraft = () => {
-    const draft = readDraftFromStorage();
+    const draft = draftCache.value;
     if (!draft) return;
 
     ticket.title = draft.title;
@@ -176,21 +172,16 @@ export const useTicketStore = defineStore("ticket", () => {
     }
 
     try {
-      isSubmitting.value = true;
-      // console.log("🚀 ~ submitTicket ~ isSubmitting:", isSubmitting.value);
       setResult();
       const payload = toRaw(ticket);
       saveTicketDraft();
 
-      // console.log("Submitting ticket:", payload, "Queue:", payload.queue_val);
-      const res = await window.electron.ticket(payload); //typedInvoke(ipcChannels.ticket, payload)
+      const res = await executeSubmitTicket(0, payload);
       setResult(res);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "提交失败，请稍后重试";
       return message;
-    } finally {
-      isSubmitting.value = false;
     }
 
     return undefined;

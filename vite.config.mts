@@ -83,7 +83,7 @@ export default defineConfig({
       ],
       electron: {
         build: {
-          config: "./electron-builder.config.ts",
+          config: join(__dirname, "electron-builder.config.ts"),
           cliOptions: {
             publish: electronPublishMode,
           },

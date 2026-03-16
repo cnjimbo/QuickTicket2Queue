@@ -20,6 +20,12 @@ importers:
       '@nestjs/microservices':
         specifier: ^11.1.16
         version: 11.1.16(@nestjs/common@11.1.16(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.16)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@vueuse/core':
+        specifier: 12.0.0
+        version: 12.0.0(typescript@5.9.3)
+      '@vueuse/router':
+        specifier: 12.0.0
+        version: 12.0.0(typescript@5.9.3)(vue-router@5.0.3(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(vue@3.5.30(typescript@5.9.3)))
       ajv:
         specifier: ^8.18.0
         version: 8.18.0
@@ -1290,6 +1296,11 @@ packages:
 
   '@vueuse/metadata@12.0.0':
     resolution: {integrity: sha512-Yzimd1D3sjxTDOlF05HekU5aSGdKjxhuhRFHA7gDWLn57PRbBIh+SF5NmjhJ0WRgF3my7T8LBucyxdFJjIfRJQ==}
+
+  '@vueuse/router@12.0.0':
+    resolution: {integrity: sha512-7Wu1rvxsTMgn8Rw8Jh13XMqxBowZMBKNuzyOXKc3XUsA7zX8mcTBdUBrwAYNoYZAGjy8AR7Z6Q1+43A65ww3eA==}
+    peerDependencies:
+      vue-router: '>=4.0.0-rc.1'
 
   '@vueuse/shared@12.0.0':
     resolution: {integrity: sha512-3i6qtcq2PIio5i/vVYidkkcgvmTjCqrf26u+Fd4LhnbBmIT6FN8y6q/GJERp8lfcB9zVEfjdV0Br0443qZuJpw==}
@@ -4828,6 +4839,14 @@ snapshots:
       - typescript
 
   '@vueuse/metadata@12.0.0': {}
+
+  '@vueuse/router@12.0.0(typescript@5.9.3)(vue-router@5.0.3(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(vue@3.5.30(typescript@5.9.3)))':
+    dependencies:
+      '@vueuse/shared': 12.0.0(typescript@5.9.3)
+      vue: 3.5.30(typescript@5.9.3)
+      vue-router: 5.0.3(@vue/compiler-sfc@3.5.30)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3)))(vue@3.5.30(typescript@5.9.3))
+    transitivePeerDependencies:
+      - typescript
 
   '@vueuse/shared@12.0.0(typescript@5.9.3)':
     dependencies:

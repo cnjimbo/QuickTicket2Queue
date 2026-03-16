@@ -12,6 +12,7 @@ import { AppServiceStore } from "./app.service.store";
 import { AppServiceCredential } from "./app.service.credential";
 import { AppServiceTicketHistory } from "./app.service.ticket-history";
 import { AppServiceTicketOptions } from "./app.service.ticket-options";
+import { AppServiceHttp } from "./app.service.http";
 
 const APP_CLOSE_REQUESTED_CHANNEL = "app-close-requested";
 const CONFIRM_APP_CLOSE_CHANNEL = "confirm-app-close";
@@ -31,6 +32,7 @@ const SHOW_NATIVE_DIALOG_CHANNEL = "show-native-dialog";
           height: 1024,
           autoHideMenuBar: isPackaged,
           icon: !isPackaged ? devIconPath : undefined,
+          backgroundColor: "#050915",
           webPreferences: {
             contextIsolation: true,
             preload: join(__dirname, "../preload/index.js"),
@@ -160,6 +162,6 @@ const SHOW_NATIVE_DIALOG_CHANNEL = "show-native-dialog";
     }),
   ],
   controllers: [AppController, AppControllerCredential, AppControllerTicket],
-  providers: [AppService, AppServiceOS, AppServiceTicket, AppServiceCredential, AppServiceTicketHistory, AppServiceTicketOptions, AppServiceStore],
+  providers: [AppService, AppServiceOS, AppServiceHttp, AppServiceTicket, AppServiceCredential, AppServiceTicketHistory, AppServiceTicketOptions, AppServiceStore],
 })
 export class AppModule { }

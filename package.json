@@ -1,22 +1,26 @@
 {
   "name": "quickticket2queue",
   "productName": "Quick Ticket to Queue",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "packageManager": "pnpm@10.32.1",
   "description": "Desktop app for quickly submitting ServiceNow tickets to common queues",
   "author": "cnjimbo",
   "main": "dist/main/index.js",
   "scripts": {
-    "clean": "rimraf dist",
+    "clean": "rimraf dist/main dist/preload dist/render dist/builder-debug.yml dist/builder-effective-config.yaml",
+    "clean:all": "rimraf dist build",
     "ensure:install": "pnpm i",
+    "pregen:ipc": "pnpm run ensure:install",
     "gen:ipc": "tsx scripts/generate-ipc-methods.ts",
+    "pregen:favicon": "pnpm run ensure:install",
     "gen:favicon": "tsx scripts/generate-favicon.ts",
     "predev": "pnpm run ensure:install",
     "dev": "vite",
     "predebug": "pnpm run ensure:install",
     "debug": "vite -- --dsb-debug",
-    "prebuild": "pnpm run gen:ipc",
+    "prebuild": "pnpm run ensure:install && pnpm run gen:ipc",
     "build": "pnpm run clean && vite build",
+    "dist:win": "electron-builder --config electron-builder.config.ts --win nsis",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
@@ -29,6 +33,8 @@
     "@nestjs/common": "^11.1.16",
     "@nestjs/core": "^11.1.16",
     "@nestjs/microservices": "^11.1.16",
+    "@vueuse/core": "12.0.0",
+    "@vueuse/router": "12.0.0",
     "ajv": "^8.18.0",
     "axios": "^1.13.6",
     "builder-util-runtime": "^9.5.1",
@@ -97,6 +103,6 @@
     ]
   },
   "volta": {
-    "node": "24.14.0"
+    "node": "22.22.1"
   }
 }

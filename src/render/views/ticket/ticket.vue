@@ -1,17 +1,49 @@
 <script setup lang="ts">
-import { computed, reactive, ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { refAutoReset, useAsyncState } from '@vueuse/core'
+import { computed, onMounted, watch } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRouteQuery } from '@vueuse/router'
 
 import { storeToRefs } from 'pinia'
 import { useTicketStore, fieldLabels } from '@render/stores/ticket'
-import { CredentialItem, TicketQueueOption } from '@/types/orm_types'
+import type { CredentialItem, TicketQueueOption } from '@/types/orm_types'
 import { getEnvTagType } from '@render/utils/env-tag'
 import { getDraftLeaveDecision } from '@render/utils/draft-leave-confirm'
 
 const electron = window.electron;
-const route = useRoute()
 const router = useRouter()
+const queueQuery = useRouteQuery<string | null>('queue', null)
+const fromHistoryCopyQuery = useRouteQuery<string | null>('fromHistoryCopy', null)
+const copyUserNameQuery = useRouteQuery<string | null>('copyUserName', null)
+const copyTitleQuery = useRouteQuery<string | null>('copyTitle', null)
+const copyContentQuery = useRouteQuery<string | null>('copyContent', null)
+const copyQueueValQuery = useRouteQuery<string | null>('copyQueueVal', null)
+
+function applyQueueFromRouteParam(rawQueue: string | null) {
+    if (typeof rawQueue !== 'string' || !rawQueue.trim()) {
+        return
+    }
+
+    const normalizedQueue = (() => {
+        try {
+            return decodeURIComponent(rawQueue).trim()
+        } catch {
+            return rawQueue.trim()
+        }
+    })()
+
+    if (!normalizedQueue) return
+    ticketStore.setTicketField('queue_val', normalizedQueue)
+}
+
+function readQueueFromRoute(): string | null {
+    const queryQueue = queueQuery.value
+    if (typeof queryQueue === 'string' && queryQueue.trim()) {
+        return queryQueue
+    }
+
+    return null
+}
 
 definePage({
     meta: {
@@ -21,46 +53,55 @@ definePage({
     }
 })
 
-const options = ref<TicketQueueOption[]>([])
 const ticketStore = useTicketStore()
-const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges } = storeToRefs(ticketStore)
-const isSubmitting = ref(false);
-const current = reactive<CredentialItem>({
+const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges, isSubmitting } = storeToRefs(ticketStore)
+const defaultCurrent: CredentialItem = {
     env: 'pfetst',
-})
-const credentialReady = ref(true)
-
-const shouldPromptDraftSave = computed(() => {
-    return hasUnsavedDraftChanges.value
-})
+}
+const { state: ticketBootstrap, execute: executeLoadTicketBootstrap } = useAsyncState(
+    async () => {
+        const [curr, userName, queueOptions] = await Promise.all([
+            window.electron.getCurrent(),
+            window.electron.getDomainUser(),
+            window.electron.getTicketOptions(),
+        ])
+        return { curr, userName, queueOptions }
+    },
+    null as { curr: CredentialItem, userName: string, queueOptions: TicketQueueOption[] } | null,
+    { immediate: false, resetOnExecute: false },
+)
+const current = computed(() => ticketBootstrap.value?.curr ?? defaultCurrent)
+const options = computed(() => ticketBootstrap.value?.queueOptions ?? [])
+const credentialReady = computed(() => Boolean(
+    current.value.client_id?.trim() &&
+    current.value.client_secret?.trim() &&
+    current.value.sn_host?.trim(),
+))
+const shouldPromptDraftSave = computed(() => hasUnsavedDraftChanges.value)
+const link = computed(() =>
+    result.value
+        ? {
+            txt: result.value.result[0].display_value,
+            href: `${current.value.sn_host}/now/sow/record/incident/${result.value.result[0].sys_id}`,
+        }
+        : {
+            txt: 'Composing...',
+            href: `${current.value.sn_host}/now/sow/home`,
+        },
+)
+const enableSubmitBtn = computed(() => credentialReady.value && isFormValid.value && !isSubmitting.value)
 
 onMounted(async () => {
     ticketStore.hydrateTicketDraft()
 
-    const [curr, userName, queueOptions] = await Promise.all([
-        window.electron.getCurrent(),
-        window.electron.getDomainUser(),
-        window.electron.getTicketOptions(),
-    ])
-    Object.assign(current, curr)
-    credentialReady.value = Boolean(
-        curr.client_id?.trim() &&
-        curr.client_secret?.trim() &&
-        curr.sn_host?.trim(),
-    )
+    const bootstrap = await executeLoadTicketBootstrap(0)
+    if (!bootstrap) return
+    const { userName } = bootstrap
     ticketStore.setTicketField('userName', userName)
-    options.value = queueOptions
 
-    const queryQueue = route.query.queue
-    const queueValue = Array.isArray(queryQueue) ? queryQueue[0] : queryQueue
-    if (typeof queueValue === 'string' && queueValue.trim()) {
-        ticketStore.setTicketField('queue_val', queueValue.trim())
-    }
+    applyQueueFromRouteParam(readQueueFromRoute())
 
-    const fromHistoryCopy = route.query.fromHistoryCopy
-    const isHistoryCopy = Array.isArray(fromHistoryCopy)
-        ? fromHistoryCopy.includes('1')
-        : fromHistoryCopy === '1'
+    const isHistoryCopy = fromHistoryCopyQuery.value === '1'
 
     if (isHistoryCopy) {
         const copyPayload = ticketStore.consumeHistoryCopyPayload()
@@ -69,17 +110,10 @@ onMounted(async () => {
             return
         }
 
-        const queryUserName = route.query.copyUserName
-        const copyUserName = typeof queryUserName === 'string' ? queryUserName : ''
-
-        const queryTitle = route.query.copyTitle
-        const copyTitle = typeof queryTitle === 'string' ? queryTitle : ''
-
-        const queryContent = route.query.copyContent
-        const copyContent = typeof queryContent === 'string' ? queryContent : ''
-
-        const queryQueueVal = route.query.copyQueueVal
-        const copyQueueVal = typeof queryQueueVal === 'string' ? queryQueueVal : ''
+        const copyUserName = copyUserNameQuery.value?.trim() ?? ''
+        const copyTitle = copyTitleQuery.value?.trim() ?? ''
+        const copyContent = copyContentQuery.value ?? ''
+        const copyQueueVal = copyQueueValQuery.value?.trim() ?? ''
 
         ticketStore.setTicketFieldsWithoutDraft({
             userName: copyUserName,
@@ -91,6 +125,13 @@ onMounted(async () => {
 
     ticketStore.refreshDraftBaseline()
 })
+
+watch(
+    queueQuery,
+    () => {
+        applyQueueFromRouteParam(readQueueFromRoute())
+    },
+)
 
 onBeforeRouteLeave(async () => {
     const decision = await getDraftLeaveDecision({
@@ -117,31 +158,10 @@ const querySearch = (query: string, cb: (results: TicketQueueOption[]) => void) 
         ),
     )
 
-
-const link = computed(() =>
-    result.value
-        ? {
-            txt: result.value?.result[0].display_value,
-            href: `${current.sn_host}/now/sow/record/incident/${result.value.result[0].sys_id}`,
-        }
-        : {
-            txt: 'waiting...',
-            href: `${current.sn_host}/now/sow/home`,
-        },
-)
-
-const enableSubmitBtn = computed(() => {
-    return credentialReady.value && isFormValid.value && !isSubmitting.value
-
-})
-
-const submitErrorMessage = ref('')
+const submitErrorMessage = refAutoReset('', 2500)
 
 function showSubmitError(message: string) {
     submitErrorMessage.value = message
-    setTimeout(() => {
-        submitErrorMessage.value = ''
-    }, 2500)
 }
 
 async function submitTicket() {

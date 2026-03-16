@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAsyncState, useEventListener } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -15,6 +16,11 @@ const skipBeforeUnloadPrompt = ref(false)
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
 let stopAppCloseSync: (() => void) | undefined
+const { execute: executeRespondToAppCloseRequest } = useAsyncState(
+  (shouldClose: boolean) => window.electron.respondToAppCloseRequest(shouldClose),
+  false,
+  { immediate: false, resetOnExecute: false },
+)
 
 const shouldPromptDraftSave = computed(() => hasUnsavedDraftChanges.value)
 
@@ -99,12 +105,12 @@ async function handleAppCloseRequested() {
     },
   })
   if (decision !== 'allow') {
-    await window.electron.respondToAppCloseRequest(false)
+    await executeRespondToAppCloseRequest(0, false)
     return
   }
 
   skipBeforeUnloadPrompt.value = true
-  await window.electron.respondToAppCloseRequest(true)
+  await executeRespondToAppCloseRequest(0, true)
 }
 
 onMounted(() => {
@@ -120,19 +126,16 @@ onMounted(() => {
     }
   })
   stopAppCloseSync = window.electron.onAppCloseRequested(handleAppCloseRequested)
-
-  window.addEventListener('popstate', syncDevUrlInput)
-  window.addEventListener('keydown', handleGlobalKeydown)
-  window.addEventListener('beforeunload', handleBeforeUnload)
 })
+
+useEventListener(window, 'popstate', syncDevUrlInput)
+useEventListener(window, 'keydown', handleGlobalKeydown)
+useEventListener(window, 'beforeunload', handleBeforeUnload)
 
 onBeforeUnmount(() => {
   stopRouteSync?.()
   stopTopToolbarSync?.()
   stopAppCloseSync?.()
-  window.removeEventListener('popstate', syncDevUrlInput)
-  window.removeEventListener('keydown', handleGlobalKeydown)
-  window.removeEventListener('beforeunload', handleBeforeUnload)
   skipBeforeUnloadPrompt.value = false
 })
 
@@ -198,11 +201,14 @@ const navLinks = computed(() => {
   font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   background: #050915;
   color: #e2e8f0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .app-root {
-  height: 98vh;
-  width: 99vw;
+  height: 100vh;
+  width: 100vw;
   overflow: hidden;
 }
 
@@ -214,6 +220,7 @@ const navLinks = computed(() => {
   padding: 8px 12px;
   background: #1f2937;
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  overflow: hidden;
 }
 
 .dev-urlbar__btn {
@@ -252,8 +259,8 @@ const navLinks = computed(() => {
 .app-shell {
   display: grid;
   grid-template-columns: 180px 1fr;
-  height: 98vh;
-  width: 99vw;
+  height: 100%;
+  width: 100%;
 }
 
 .app-shell.with-dev-urlbar {
@@ -335,6 +342,7 @@ const navLinks = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 }
 
 .display-header {

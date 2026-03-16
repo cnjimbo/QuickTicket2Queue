@@ -54,7 +54,8 @@
 </div>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { refAutoReset, useAsyncState } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCredentialStore } from '@render/stores/credentials'
 import type { CredentialItem } from '@/types/orm_types'
@@ -76,7 +77,7 @@ const store = useCredentialStore()
 const { tableData, currentKey } = storeToRefs(store)
 const { handleEdit, setCurrent } = store
 
-const successVisible = ref(false)
+const successVisible = refAutoReset(false, 2500)
 const baselineSnapshot = ref('')
 
 const snapshotTable = (rows: CredentialItem[]): string => {
@@ -95,9 +96,17 @@ const syncBaseline = () => {
   baselineSnapshot.value = snapshotTable(tableData.value)
 }
 
+const { execute: executeLoadCredential } = useAsyncState(
+  async () => {
+    await store.loadCredential()
+    syncBaseline()
+  },
+  undefined,
+  { immediate: true, resetOnExecute: false },
+)
+
 const loadCredential = async () => {
-  await store.loadCredential()
-  syncBaseline()
+  await executeLoadCredential(0)
 }
 
 const handleSaveAll = async () => {
@@ -108,7 +117,6 @@ const handleSaveAll = async () => {
 
 function showSuccess() {
   successVisible.value = true
-  setTimeout(() => { successVisible.value = false }, 2500)
 }
 
 const handleClear = () => {
@@ -128,9 +136,6 @@ const handleClear = () => {
   })()
 }
 
-onMounted(async () => {
-  await loadCredential()
-})
 </script>
 
 <style scoped>

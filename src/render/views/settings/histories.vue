@@ -1,5 +1,11 @@
 <template>
 <div class="histories-container">
+  <Teleport to="body">
+    <div v-if="successVisible" class="global-toast">
+      <el-alert title="历史记录已清空" type="success" show-icon :closable="false" />
+    </div>
+  </Teleport>
+
   <div class="toolbar">
     <el-text>共 {{ histories.length }} 条历史记录</el-text>
     <div class="toolbar-actions">
@@ -47,8 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { refAutoReset, useAsyncState } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import { useTicketStore } from '@render/stores/ticket'
 import { TicketHistoryItem } from '@/types/orm_types';
@@ -81,22 +86,30 @@ const getTxt = (ticket: TicketHistoryItem): "pfetst" | "pfestg" | "pfeprod" => {
 }
 
 const getType = (ticket: TicketHistoryItem) => getEnvTagType(getTxt(ticket))
-const histories = ref<TicketHistoryItem[]>([])
-const loading = ref(false)
 const router = useRouter()
 const ticketStore = useTicketStore()
+const { state: histories, isLoading: loading, execute: executeLoadHistories } = useAsyncState(
+  () => window.electron.getTicketHistory(),
+  [] as TicketHistoryItem[],
+  { immediate: true, resetOnExecute: false },
+)
+const { execute: executeClearHistories } = useAsyncState(
+  () => window.electron.clearTicketHistory(),
+  undefined,
+  { immediate: false, resetOnExecute: false },
+)
+const successVisible = refAutoReset(false, 2500)
 
 const getRowKey = (row: TicketHistoryItem) => {
   return `${row.result.sys_id}-${row.result.createTime ?? ''}`
 }
 
 const loadHistories = async () => {
-  loading.value = true
-  try {
-    histories.value = await window.electron.getTicketHistory()
-  } finally {
-    loading.value = false
-  }
+  await executeLoadHistories(0)
+}
+
+const showSuccess = () => {
+  successVisible.value = true
 }
 
 const handleClear = () => {
@@ -110,9 +123,9 @@ const handleClear = () => {
 
     if (!shouldClear) return
 
-    await window.electron.clearTicketHistory()
+    await executeClearHistories(0)
     await loadHistories()
-    ElMessage.success('历史记录已清空')
+    showSuccess()
   })()
 }
 
@@ -140,7 +153,6 @@ const copyTicket = async (history: TicketHistoryItem) => {
   })
 }
 
-onMounted(loadHistories)
 </script>
 
 <style scoped>
@@ -159,5 +171,14 @@ onMounted(loadHistories)
 .toolbar-actions {
   display: flex;
   gap: 8px;
+}
+
+.global-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  min-width: 300px;
 }
 </style>
