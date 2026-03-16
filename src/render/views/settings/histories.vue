@@ -52,6 +52,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useTicketStore } from '@render/stores/ticket'
 import { TicketHistoryItem } from '@/types/orm_types';
+import { getEnvTagType } from '@render/utils/env-tag'
 import { showNativeConfirmDialog } from '@render/utils/native-dialog'
 
 definePage({
@@ -65,18 +66,6 @@ definePage({
   }
 })
 
-const getType = (ticket: TicketHistoryItem): "primary" | "success" | "info" | "warning" | "danger" => {
-
-  const txt = getTxt(ticket)
-
-  if (txt == "pfeprod")
-    return 'info'
-  if (txt == "pfestg")
-    return 'warning'
-  if (txt == "pfetst")
-    return 'warning'
-  return 'warning'
-}
 const getTxt = (ticket: TicketHistoryItem): "pfetst" | "pfestg" | "pfeprod" => {
 
   if (ticket.result.record_link?.includes("pfetst")) {
@@ -90,6 +79,8 @@ const getTxt = (ticket: TicketHistoryItem): "pfetst" | "pfestg" | "pfeprod" => {
   }
   return 'pfetst'
 }
+
+const getType = (ticket: TicketHistoryItem) => getEnvTagType(getTxt(ticket))
 const histories = ref<TicketHistoryItem[]>([])
 const loading = ref(false)
 const router = useRouter()
