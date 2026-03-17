@@ -35,6 +35,7 @@ const SHOW_NATIVE_DIALOG_CHANNEL = "show-native-dialog";
           backgroundColor: "#050915",
           webPreferences: {
             contextIsolation: true,
+            devTools: !isPackaged,
             preload: join(__dirname, "../preload/index.js"),
           },
         });

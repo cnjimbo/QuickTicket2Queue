@@ -165,7 +165,7 @@ const navLinks = computed(() => {
     <button type="button" class="dev-urlbar__btn is-primary" @click="navigateByDevUrlInput">Go</button>
   </div>
 
-  <div class="app-shell" :class="{ 'with-dev-urlbar': showTopToolbar }">
+  <div class="app-shell">
     <aside class="nav-panel">
       <div class="nav-brand">
         <p class="eyebrow">Quick Ticket to Queue</p>
@@ -197,18 +197,25 @@ const navLinks = computed(() => {
 </template>
 
 <style scoped>
-:global(html, body, #app) {
+:global(html),
+:global(body),
+:global(#app) {
   font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   background: #050915;
   color: #e2e8f0;
+  width: 100%;
   height: 100%;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 .app-root {
-  height: 100vh;
-  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -257,14 +264,12 @@ const navLinks = computed(() => {
 }
 
 .app-shell {
+  flex: 1;
   display: grid;
   grid-template-columns: 180px 1fr;
-  height: 100%;
+  height: auto;
   width: 100%;
-}
-
-.app-shell.with-dev-urlbar {
-  height: calc(100vh - 50px);
+  min-height: 0;
 }
 
 .nav-panel {
@@ -274,7 +279,8 @@ const navLinks = computed(() => {
   flex-direction: column;
   gap: 16px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-
+  min-height: 0;
+  overflow: auto;
 }
 
 .nav-brand h1 {
@@ -342,6 +348,7 @@ const navLinks = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -369,7 +376,8 @@ const navLinks = computed(() => {
 }
 
 .display-component {
-  min-height: 100%;
+  min-height: 0;
+  height: 100%;
 }
 
 .empty-state {

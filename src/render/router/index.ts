@@ -16,6 +16,14 @@ export const router = createRouter({
   routes: safeRoutes,
 });
 
+router.beforeEach((to) => {
+  if (to.path === "/") {
+    return { path: "/ticket/ticket", query: to.query };
+  }
+
+  return true;
+});
+
 if (import.meta.hot) {
   handleHotUpdate(router);
 }

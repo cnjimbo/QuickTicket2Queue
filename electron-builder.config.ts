@@ -47,10 +47,20 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
 }
 
 const shouldDisableWindowsSigning = isWindowsDomainEnvironment();
+const shouldSignAndEditExecutable =
+  process.platform === "win32" &&
+  !shouldDisableWindowsSigning &&
+  process.env.ELECTRON_BUILDER_SIGN_AND_EDIT_EXECUTABLE === "true";
 
 if (shouldDisableWindowsSigning) {
   console.warn(
     " ⚠️  Detected Windows domain environment. Code signing will be disabled to avoid potential issues with domain policies.",
+  );
+}
+
+if (!shouldSignAndEditExecutable) {
+  console.warn(
+    " ⚠️  Windows executable resource editing is disabled. Set ELECTRON_BUILDER_SIGN_AND_EDIT_EXECUTABLE=true to enable rcedit metadata updates.",
   );
 }
 
@@ -66,10 +76,11 @@ const config: Configuration = {
   ...getPublishConfig(),
   npmRebuild: true,
   win: {
-    target: ["nsis", "zip"],
+    // target: ["nsis", "zip"],
+    target: ["dir"],
     executableName: "quickticket2queue",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
-    signAndEditExecutable: !shouldDisableWindowsSigning,
+    signAndEditExecutable: shouldSignAndEditExecutable,
     icon: "assets/icons/icon-512.png",
   },
   nsis: {
@@ -93,15 +104,10 @@ const config: Configuration = {
     "dist/main/**/*",
     "dist/preload/**/*",
     "dist/render/**/*",
-    "node_modules/**/*",
-    "node_modules/.pnpm/**/*",
-    "!**/*.map",
-    "!**/*.md",
-    "!**/*.markdown",
-    "!**/{test,tests,__tests__,example,examples,docs,doc}/**",
-    "!**/tsconfig*.json",
-    "!**/*.d.ts",
-    "!**/*.ts",
+    // "node_modules",
+    // "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme,LICENSE,LICENSE.txt,license.txt,History.md,history.md,Makefile,makefile}",
+    // "!**/node_modules/*/*.{a,gyp,gypi,md,txt}",
+    // "!**/node_modules/*/{test,tests,spec,specs,example,examples,doc,docs,website,www,benchmark,benchmarks,example.js,gulpfile.js}",
   ],
 };
 
