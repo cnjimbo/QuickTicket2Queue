@@ -42,6 +42,8 @@ jobs:
 
       - name: Detect version increase
         id: version_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
@@ -79,7 +81,11 @@ jobs:
 
           if [ -z "$SKIP_REASON" ]; then
             git fetch --tags
-            if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            TAG_EXISTS=false
+            RELEASE_EXISTS=false
+            git rev-parse "$TAG_NAME" >/dev/null 2>&1 && TAG_EXISTS=true
+            gh release view "$TAG_NAME" >/dev/null 2>&1 && RELEASE_EXISTS=true
+            if [ "$TAG_EXISTS" = "true" ] || [ "$RELEASE_EXISTS" = "true" ]; then
               SHOULD_TAG="true"
               OVERWRITE="true"
               PUBLISH_TAG_PREFIX="tmp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-v"
@@ -185,7 +191,7 @@ jobs:
         run: |
           BRANCH="${{ github.ref_name }}"
           SANITIZED="${BRANCH//\//-}"
-          echo "value=-${SANITIZED}-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+          echo "value=${SANITIZED}-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish
         env:
