@@ -80,7 +80,7 @@ jobs:
             if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
               SHOULD_TAG="true"
               OVERWRITE="true"
-              PUBLISH_TAG_NAME="$TAG_NAME-backup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+              PUBLISH_TAG_NAME="$TAG_NAME-temp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
             else
               SHOULD_TAG="true"
               OVERWRITE="false"
