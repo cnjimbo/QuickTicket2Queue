@@ -220,11 +220,8 @@ jobs:
         run: |
           Write-Host "[信息] 正在收集 release $env:PUBLISH_TAG_NAME 的构建产物"
 
-          $files = Get-ChildItem build -Recurse -File |
-            Where-Object {
-              $_.Name -notin @('builder-debug.yml', 'builder-effective-config.yaml') -and
-              $_.FullName -notmatch '[\\/]win-unpacked([\\/]|$)'
-            } |
+          $files = Get-ChildItem build -File |
+            Where-Object { $_.Extension -in @('.exe', '.zip', '.AppImage', '.blockmap', '.yml') -and $_.Name -notlike 'builder-*' } |
             Select-Object -ExpandProperty FullName
 
           if ($files.Count -eq 0) {
