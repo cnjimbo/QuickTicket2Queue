@@ -90,7 +90,7 @@ jobs:
               SHOULD_TAG="true"
               OVERWRITE="true"
               PUBLISH_TAG_PREFIX="v"
-              PUBLISH_TAG_NAME="v${RELEASE_VERSION}-tmp-$SHORT_SHA"
+              PUBLISH_TAG_NAME="v${RELEASE_VERSION}-$SHORT_SHA"
             else
               SHOULD_TAG="true"
               OVERWRITE="false"
@@ -249,6 +249,15 @@ jobs:
           if [ "$IS_DRAFT" != "false" ]; then
             echo "Error: release $RELEASE_ID is still draft after publish"
             exit 1
+          fi
+
+          if [ "$PRERELEASE_BOOL" = "false" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F make_latest=true >/dev/null
+            LATEST_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.id' 2>/dev/null || true)
+            if [ "$LATEST_ID" != "$RELEASE_ID" ]; then
+              echo "Error: release $RELEASE_ID was published but not marked latest (latest=$LATEST_ID)"
+              exit 1
+            fi
           fi
 
           if [ "$OVERWRITE" = "true" ] && [ "$PUBLISH_TAG_NAME" != "$TAG_NAME" ]; then
