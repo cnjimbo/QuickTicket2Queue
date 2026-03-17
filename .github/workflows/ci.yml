@@ -180,7 +180,13 @@ jobs:
         id: prepare_temp_workspace
         shell: bash
         run: |
-          TEMP_DIR="$RUNNER_TEMP/qt2q-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.os }}"
+          if command -v cygpath >/dev/null 2>&1; then
+            RUNNER_TEMP_BASH=$(cygpath -u "$RUNNER_TEMP")
+          else
+            RUNNER_TEMP_BASH="$RUNNER_TEMP"
+          fi
+
+          TEMP_DIR="$RUNNER_TEMP_BASH/qt2q-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.os }}"
           rm -rf "$TEMP_DIR"
           mkdir -p "$TEMP_DIR"
 
