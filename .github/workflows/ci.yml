@@ -26,6 +26,7 @@ jobs:
       release_version: ${{ steps.version_check.outputs.release_version }}
       tag_name: ${{ steps.version_check.outputs.tag_name }}
       publish_tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
+      publish_tag_prefix: ${{ steps.version_check.outputs.publish_tag_prefix }}
       should_tag: ${{ steps.version_check.outputs.should_tag }}
       skip_reason: ${{ steps.version_check.outputs.skip_reason }}
       prerelease: ${{ steps.version_check.outputs.prerelease }}
@@ -49,6 +50,7 @@ jobs:
           RELEASE_TYPE="release"
           TAG_NAME="v$RELEASE_VERSION"
           PUBLISH_TAG_NAME="$TAG_NAME"
+          PUBLISH_TAG_PREFIX="v"
           STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
           PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$'
 
@@ -80,7 +82,8 @@ jobs:
             if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
               SHOULD_TAG="true"
               OVERWRITE="true"
-              PUBLISH_TAG_NAME="$TAG_NAME-temp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+              PUBLISH_TAG_PREFIX="tmp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-v"
+              PUBLISH_TAG_NAME="${PUBLISH_TAG_PREFIX}${RELEASE_VERSION}"
             else
               SHOULD_TAG="true"
               OVERWRITE="false"
@@ -94,6 +97,7 @@ jobs:
           echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "publish_tag_name=$PUBLISH_TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "publish_tag_prefix=$PUBLISH_TAG_PREFIX" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
           echo "overwrite=${OVERWRITE:-false}" >> "$GITHUB_OUTPUT"
@@ -103,7 +107,6 @@ jobs:
         if: github.event_name == 'push' && steps.version_check.outputs.should_tag == 'true'
         env:
           PUBLISH_TAG_NAME: ${{ steps.version_check.outputs.publish_tag_name }}
-          OVERWRITE: ${{ steps.version_check.outputs.overwrite }}
         run: |
           git fetch --tags
 
@@ -141,6 +144,7 @@ jobs:
           echo "release_version=${{ steps.version_check.outputs.release_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "tag_name=${{ steps.version_check.outputs.tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "publish_tag_name=${{ steps.version_check.outputs.publish_tag_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "publish_tag_prefix=${{ steps.version_check.outputs.publish_tag_prefix }}" >> "$GITHUB_STEP_SUMMARY"
           echo "should_tag=${{ steps.version_check.outputs.should_tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "overwrite=${{ steps.version_check.outputs.overwrite }}" >> "$GITHUB_STEP_SUMMARY"
           echo "prerelease=${{ steps.version_check.outputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
@@ -172,12 +176,28 @@ jobs:
           node-version: 24.x
           cache: pnpm
 
+      - name: Prepare temporary workspace
+        id: prepare_temp_workspace
+        shell: bash
+        run: |
+          TEMP_DIR="$RUNNER_TEMP/qt2q-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.os }}"
+          rm -rf "$TEMP_DIR"
+          mkdir -p "$TEMP_DIR"
+
+          # Export tracked files of current commit into a clean temporary workspace.
+          git archive --format=tar HEAD | tar -x -C "$TEMP_DIR"
+
+          echo "temp_dir=$TEMP_DIR" >> "$GITHUB_OUTPUT"
+
       - name: Install
+        working-directory: ${{ steps.prepare_temp_workspace.outputs.temp_dir }}
         run: pnpm i
 
       - name: Build and publish
+        working-directory: ${{ steps.prepare_temp_workspace.outputs.temp_dir }}
         env:
           ELECTRON_BUILDER_PUBLISH: always
+          ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.auto_tag_release.outputs.publish_tag_prefix }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
           GITHUB_REF: refs/tags/${{ needs.auto_tag_release.outputs.publish_tag_name }}

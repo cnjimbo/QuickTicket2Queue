@@ -5,6 +5,7 @@ const DEFAULT_GITHUB_REPOSITORY = "cnjimbo/QuickTicket2Queue";
 const APP_VERSION = readAppVersion(__dirname);
 const IS_PRERELEASE_VERSION = /-/.test(APP_VERSION);
 const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
+const publishTagNamePrefix = process.env.ELECTRON_BUILDER_TAG_NAME_PREFIX?.trim();
 
 assertSupportedAppVersion(APP_VERSION, "electron-builder");
 
@@ -48,6 +49,7 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
         provider: "github",
         owner,
         repo,
+        ...(publishTagNamePrefix ? { tagNamePrefix: publishTagNamePrefix } : {}),
         releaseType: getReleaseType(),
       },
     ],
