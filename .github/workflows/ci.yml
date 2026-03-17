@@ -25,10 +25,12 @@ jobs:
       current_version: ${{ steps.version_check.outputs.current_version }}
       release_version: ${{ steps.version_check.outputs.release_version }}
       tag_name: ${{ steps.version_check.outputs.tag_name }}
+      publish_tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
       should_tag: ${{ steps.version_check.outputs.should_tag }}
       skip_reason: ${{ steps.version_check.outputs.skip_reason }}
       prerelease: ${{ steps.version_check.outputs.prerelease }}
       release_type: ${{ steps.version_check.outputs.release_type }}
+      overwrite: ${{ steps.version_check.outputs.overwrite }}
       created: ${{ steps.create_tag.outputs.created }}
       released: ${{ steps.release_status.outputs.released }}
 
@@ -46,6 +48,7 @@ jobs:
           SKIP_REASON=""
           RELEASE_TYPE="release"
           TAG_NAME="v$RELEASE_VERSION"
+          PUBLISH_TAG_NAME="$TAG_NAME"
           STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
           PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$'
 
@@ -77,6 +80,7 @@ jobs:
             if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
               SHOULD_TAG="true"
               OVERWRITE="true"
+              PUBLISH_TAG_NAME="$TAG_NAME-backup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
             else
               SHOULD_TAG="true"
               OVERWRITE="false"
@@ -89,6 +93,7 @@ jobs:
           echo "should_tag=$SHOULD_TAG" >> "$GITHUB_OUTPUT"
           echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "publish_tag_name=$PUBLISH_TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
           echo "overwrite=${OVERWRITE:-false}" >> "$GITHUB_OUTPUT"
@@ -97,7 +102,7 @@ jobs:
         id: create_tag
         if: github.event_name == 'push' && steps.version_check.outputs.should_tag == 'true'
         env:
-          TAG_NAME: ${{ steps.version_check.outputs.tag_name }}
+          PUBLISH_TAG_NAME: ${{ steps.version_check.outputs.publish_tag_name }}
           OVERWRITE: ${{ steps.version_check.outputs.overwrite }}
         run: |
           git fetch --tags
@@ -105,13 +110,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ "$OVERWRITE" = "true" ]; then
-            git tag -d "$TAG_NAME" || true
-            git push origin ":refs/tags/$TAG_NAME" || true
-          fi
-
-          git tag "$TAG_NAME" "$GITHUB_SHA"
-          git push origin "$TAG_NAME"
+          git tag "$PUBLISH_TAG_NAME" "$GITHUB_SHA"
+          git push origin "$PUBLISH_TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub draft release
@@ -119,8 +119,8 @@ jobs:
         if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version_check.outputs.tag_name }}
-          name: ${{ steps.version_check.outputs.tag_name }}
+          tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
+          name: ${{ steps.version_check.outputs.publish_tag_name }}
           generate_release_notes: true
           draft: true
           prerelease: ${{ steps.version_check.outputs.prerelease == 'true' }}
@@ -140,7 +140,9 @@ jobs:
           echo "current_version=${{ steps.version_check.outputs.current_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "release_version=${{ steps.version_check.outputs.release_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "tag_name=${{ steps.version_check.outputs.tag_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "publish_tag_name=${{ steps.version_check.outputs.publish_tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "should_tag=${{ steps.version_check.outputs.should_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "overwrite=${{ steps.version_check.outputs.overwrite }}" >> "$GITHUB_STEP_SUMMARY"
           echo "prerelease=${{ steps.version_check.outputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
           echo "release_type=${{ steps.version_check.outputs.release_type }}" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "${{ steps.version_check.outputs.skip_reason }}" ]; then
@@ -177,8 +179,8 @@ jobs:
         env:
           ELECTRON_BUILDER_PUBLISH: always
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REF_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
-          GITHUB_REF: refs/tags/${{ needs.auto_tag_release.outputs.tag_name }}
+          GITHUB_REF_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
+          GITHUB_REF: refs/tags/${{ needs.auto_tag_release.outputs.publish_tag_name }}
         run: pnpm run build
 
   finalize_release:
@@ -192,18 +194,41 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
+          PUBLISH_TAG_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
           PRERELEASE: ${{ needs.auto_tag_release.outputs.prerelease }}
+          OVERWRITE: ${{ needs.auto_tag_release.outputs.overwrite }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
-          RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" --jq '.id')
+          RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$PUBLISH_TAG_NAME" --jq '.id')
+
+          if [ "$OVERWRITE" = "true" ]; then
+            OLD_RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" --jq '.id' 2>/dev/null || true)
+            if [ -n "$OLD_RELEASE_ID" ]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$OLD_RELEASE_ID"
+            fi
+
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG_NAME" 2>/dev/null || true
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$TAG_NAME" \
+              -f sha="$TARGET_SHA"
+          fi
 
           if [ "$PRERELEASE" = "true" ]; then
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+              -f tag_name="$TAG_NAME" \
+              -f name="$TAG_NAME" \
               -f draft=false \
               -f prerelease=true \
               -f make_latest=false
           else
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+              -f tag_name="$TAG_NAME" \
+              -f name="$TAG_NAME" \
               -f draft=false \
               -f prerelease=false \
               -f make_latest=true
+          fi
+
+          if [ "$OVERWRITE" = "true" ] && [ "$PUBLISH_TAG_NAME" != "$TAG_NAME" ]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$PUBLISH_TAG_NAME" 2>/dev/null || true
           fi
