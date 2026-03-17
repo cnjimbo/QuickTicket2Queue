@@ -71,6 +71,8 @@ function stagePackageJson(projectRoot: string): void {
 function main(): void {
     const projectRoot = process.cwd();
     const shouldStage = process.argv.includes("--stage");
+    const checkOnly = process.argv.includes("--check-only");
+    const failIfUpdated = process.argv.includes("--fail-if-updated");
     const currentVersion = readAppVersion(projectRoot);
     const branchName = getCurrentBranch();
     const isMainBranch = branchName === "main";
@@ -102,6 +104,14 @@ function main(): void {
         return;
     }
 
+    if (checkOnly) {
+        console.error(
+            `[hook] version check failed on branch ${branchName || "<unknown>"}: ` +
+            `${currentVersion} should be ${nextVersion}. Run commit flow to auto-fix package.json version.`,
+        );
+        process.exit(1);
+    }
+
     const packageJson = readPackageJson(projectRoot);
     packageJson.version = nextVersion;
     writePackageJson(projectRoot, packageJson);
@@ -111,6 +121,11 @@ function main(): void {
     }
 
     console.log(`[hook] version updated on branch ${branchName || "<unknown>"}: ${currentVersion} -> ${nextVersion}`);
+
+    if (failIfUpdated) {
+        console.error("[hook] push aborted: package.json version was auto-updated. Please commit the changes and push again.");
+        process.exit(1);
+    }
 }
 
 main();
