@@ -13,6 +13,8 @@ const { hasUnsavedDraftChanges } = storeToRefs(ticketStore)
 const showTopToolbar = ref(import.meta.env.DEV)
 const devUrlInput = ref('')
 const skipBeforeUnloadPrompt = ref(false)
+const isCheckingForUpdates = ref(false)
+const isDownloadingUpdate = ref(false)
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
 let stopAppCloseSync: (() => void) | undefined
@@ -95,6 +97,157 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
+async function promptAndOpenReleasePage(releaseUrl?: string) {
+  if (!releaseUrl) return
+
+  const response = await window.electron.showNativeDialog({
+    title: '打开 GitHub Releases',
+    message: '是否打开 GitHub Releases 页面？',
+    buttons: ['打开', '取消'],
+    type: 'info',
+    defaultId: 0,
+    cancelId: 1,
+  })
+
+  if (response === 0) {
+    await window.electron.openLink(releaseUrl)
+  }
+}
+
+async function promptInstallDownloadedUpdate(version?: string) {
+  const response = await window.electron.showNativeDialog({
+    title: '更新已下载',
+    message: version ? `版本 ${version} 已下载完成，是否立即重启安装？` : '更新已下载完成，是否立即重启安装？',
+    buttons: ['立即安装', '稍后'],
+    type: 'info',
+    defaultId: 0,
+    cancelId: 1,
+  })
+
+  if (response === 0) {
+    await window.electron.installDownloadedAppUpdate()
+  }
+}
+
+async function downloadAvailableUpdate() {
+  if (isDownloadingUpdate.value) return
+
+  isDownloadingUpdate.value = true
+  try {
+    const result = await window.electron.downloadAppUpdate()
+
+    if (result.status === 'downloaded') {
+      await promptInstallDownloadedUpdate(result.version)
+      return
+    }
+
+    if (result.status === 'portable') {
+      await promptAndOpenReleasePage(result.releaseUrl)
+      return
+    }
+
+    if (result.status === 'error') {
+      await window.electron.showNativeDialog({
+        title: '下载更新失败',
+        message: result.message ?? '下载更新时发生未知错误。',
+        buttons: ['确定'],
+        type: 'error',
+      })
+      return
+    }
+
+    await window.electron.showNativeDialog({
+      title: '无需下载',
+      message: '当前没有可下载的更新。',
+      buttons: ['确定'],
+      type: 'info',
+    })
+  } finally {
+    isDownloadingUpdate.value = false
+  }
+}
+
+async function handleCheckForUpdates() {
+  if (isCheckingForUpdates.value || isDownloadingUpdate.value) return
+
+  isCheckingForUpdates.value = true
+  try {
+    const result = await window.electron.checkForAppUpdates()
+
+    if (result.status === 'disabled') {
+      await window.electron.showNativeDialog({
+        title: '自动更新不可用',
+        message: result.message ?? '当前环境不支持自动更新。',
+        buttons: ['确定'],
+        type: 'info',
+      })
+      return
+    }
+
+    if (result.status === 'up-to-date') {
+      await window.electron.showNativeDialog({
+        title: '已是最新版本',
+        message: result.version ? `当前版本 ${result.version} 已是最新版本。` : '当前已是最新版本。',
+        buttons: ['确定'],
+        type: 'info',
+      })
+      return
+    }
+
+    if (result.status === 'downloaded') {
+      await promptInstallDownloadedUpdate(result.version)
+      return
+    }
+
+    if (result.status === 'portable') {
+      const response = await window.electron.showNativeDialog({
+        title: '发现新版本',
+        message: result.version ? `发现新版本 ${result.version}。便携版不支持应用内下载。` : '发现新版本。便携版不支持应用内下载。',
+        buttons: ['打开 GitHub Releases', '取消'],
+        type: 'info',
+        defaultId: 0,
+        cancelId: 1,
+      })
+
+      if (response === 0 && result.releaseUrl) {
+        await window.electron.openLink(result.releaseUrl)
+      }
+      return
+    }
+
+    if (result.status === 'update-available') {
+      const response = await window.electron.showNativeDialog({
+        title: '发现新版本',
+        message: result.version ? `发现新版本 ${result.version}，是否立即下载？` : '发现新版本，是否立即下载？',
+        buttons: ['下载更新', '稍后'],
+        type: 'info',
+        defaultId: 0,
+        cancelId: 1,
+      })
+
+      if (response === 0) {
+        await downloadAvailableUpdate()
+      }
+      return
+    }
+
+    await window.electron.showNativeDialog({
+      title: '检查更新失败',
+      message: result.message ?? '检查更新时发生未知错误。',
+      buttons: ['打开 GitHub Releases', '关闭'],
+      type: 'warning',
+      defaultId: 0,
+      cancelId: 1,
+    }).then(async (response) => {
+      if (response === 0 && result.releaseUrl) {
+        await window.electron.openLink(result.releaseUrl)
+      }
+    })
+  } finally {
+    isCheckingForUpdates.value = false
+  }
+}
+
 async function handleAppCloseRequested() {
   const decision = await getDraftLeaveDecision({
     actionLabel: '退出程序',
@@ -171,6 +324,10 @@ const navLinks = computed(() => {
         <p class="eyebrow">Quick Ticket to Queue</p>
         <h1>工单控制台</h1>
         <p class="nav-subtitle">常用队列、凭据配置与工单提交入口</p>
+        <button type="button" class="update-action" :disabled="isCheckingForUpdates || isDownloadingUpdate"
+          @click="handleCheckForUpdates">
+          {{ isDownloadingUpdate ? '下载更新中...' : isCheckingForUpdates ? '检查更新中...' : '检查更新' }}
+        </button>
       </div>
       <nav class="nav-links">
         <RouterLink v-for="link in navLinks" :key="link.to" :to="link.to" class="nav-link"
@@ -293,6 +450,24 @@ const navLinks = computed(() => {
   margin: 0;
   color: #94a3b8;
   font-size: 12px;
+}
+
+.update-action {
+  margin-top: 12px;
+  width: 100%;
+  height: 38px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #e0f2fe;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.update-action:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .eyebrow {

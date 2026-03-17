@@ -27,6 +27,18 @@
     </div>
 
     <el-card>
+        <template #header>更新设置</template>
+        <div class="update-settings">
+            <div>
+                <div class="update-settings__title">接收 Beta 版本更新</div>
+                <div class="update-settings__desc">开启后，检查更新会同时匹配 GitHub Releases 中的 beta/prerelease 版本。</div>
+            </div>
+            <el-switch v-model="includeBetaUpdates" :loading="updatePreferencesLoading || savingUpdatePreferences"
+                inline-prompt active-text="开" inactive-text="关" @change="handleUpdatePreferenceChange" />
+        </div>
+    </el-card>
+
+    <el-card>
         <div class="add-form">
             <el-input v-model="newOption.des" placeholder="描述 (des)" />
             <el-input v-model="newOption.queue" placeholder="队列 (queue)" />
@@ -52,7 +64,7 @@
 
 <script setup lang="ts">
 import { refAutoReset, useAsyncState } from '@vueuse/core'
-import { reactive, ref } from 'vue'
+import { reactive, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import type { TicketQueueOption } from '@/types/orm_types'
 import { showNativeDialog } from '@render/utils/native-dialog'
@@ -79,6 +91,15 @@ const { isLoading: adding, execute: executeAddOption } = useAsyncState(
     undefined,
     { immediate: false, resetOnExecute: false, throwError: true },
 )
+const {
+    state: updatePreferences,
+    isLoading: updatePreferencesLoading,
+    execute: executeLoadUpdatePreferences,
+} = useAsyncState(
+    () => window.electron.getUpdatePreferences(),
+    { includeBeta: false },
+    { immediate: true, resetOnExecute: false, throwError: true },
+)
 const { isLoading: syncing, execute: executeSyncOptions } = useAsyncState(
     (mode: SyncMode) => window.electron.syncTicketOptionsFromGithub(mode),
     undefined,
@@ -94,11 +115,20 @@ const { execute: executeDeleteOption } = useAsyncState(
     undefined,
     { immediate: false, resetOnExecute: false, throwError: true },
 )
+const {
+    isLoading: savingUpdatePreferences,
+    execute: executeSaveUpdatePreferences,
+} = useAsyncState(
+    (includeBeta: boolean) => window.electron.setUpdatePreferences({ includeBeta }),
+    { includeBeta: false },
+    { immediate: false, resetOnExecute: false, throwError: true },
+)
 
 const newOption = reactive<TicketQueueOption>({
     des: '',
     queue: '',
 })
+const includeBetaUpdates = ref(false)
 
 const noticeText = refAutoReset('', 2500)
 const noticeType = ref<'success' | 'error'>('success')
@@ -107,6 +137,10 @@ function showNotice(type: 'success' | 'error', text: string) {
     noticeType.value = type
     noticeText.value = text
 }
+
+watchEffect(() => {
+    includeBetaUpdates.value = updatePreferences.value.includeBeta
+})
 
 const loadOptions = async () => {
     try {
@@ -214,6 +248,19 @@ const handleSuggestDefaultQueue = () => {
     window.electron.openLink(GITHUB_TICKET_OPTIONS_EDIT_URL)
 }
 
+const handleUpdatePreferenceChange = async (value: string | number | boolean) => {
+    try {
+        const preferences = await executeSaveUpdatePreferences(0, value as boolean)
+        includeBetaUpdates.value = preferences.includeBeta
+        await executeLoadUpdatePreferences(0)
+        showNotice('success', preferences.includeBeta ? '已开启 Beta 更新检查' : '已切换为仅检查稳定版本')
+    } catch (error) {
+        includeBetaUpdates.value = updatePreferences.value.includeBeta
+        const message = error instanceof Error ? error.message : '保存更新设置失败，请稍后重试'
+        showNotice('error', message)
+    }
+}
+
 const jumpToTicket = async (queue: string) => {
     await router.push({
         path: '/ticket/ticket',
@@ -247,6 +294,23 @@ const jumpToTicket = async (queue: string) => {
     display: grid;
     grid-template-columns: 1fr 1fr auto;
     gap: 8px;
+}
+
+.update-settings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.update-settings__title {
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.update-settings__desc {
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
 }
 
 .global-toast {

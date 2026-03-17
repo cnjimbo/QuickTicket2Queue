@@ -1,7 +1,7 @@
 {
   "name": "quickticket2queue",
   "productName": "Quick Ticket to Queue",
-  "version": "0.0.8",
+  "version": "0.0.9-beta.1",
   "packageManager": "pnpm@10.32.1",
   "description": "Desktop app for quickly submitting ServiceNow tickets to common queues",
   "author": "cnjimbo",
@@ -18,7 +18,7 @@
     "prebuild": "pnpm run gen:ipc",
     "build": "pnpm run clean && vite build",
     "dist:win:local": "electron-builder --config electron-builder.config.ts --win dir",
-    "dist:win:update:test": "set ELECTRON_BUILDER_LOCAL_UPDATE_TEST=true&& electron-builder --config electron-builder.config.ts --publish never --win dir",
+    "dist:win:github:update:test": "set ELECTRON_BUILDER_PUBLISH=always&& set GH_TOKEN=dummy&& electron-builder --config electron-builder.config.ts --publish never --win nsis",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",

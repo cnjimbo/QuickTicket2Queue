@@ -5,6 +5,36 @@ export default {
   ipcRenderer,
   ...ipcInvoke,
   readCredential: ipcInvoke.readCredential,
+  getUpdatePreferences: () =>
+    ipcRenderer.invoke("get-update-preferences") as Promise<{
+      includeBeta: boolean;
+    }>,
+  setUpdatePreferences: (preferences: { includeBeta: boolean }) =>
+    ipcRenderer.invoke("set-update-preferences", preferences) as Promise<{
+      includeBeta: boolean;
+    }>,
+  checkForAppUpdates: () =>
+    ipcRenderer.invoke("check-for-app-updates") as Promise<{
+      status: "disabled" | "up-to-date" | "update-available" | "downloaded" | "portable" | "error";
+      version?: string;
+      releaseUrl?: string;
+      message?: string;
+      preferences?: {
+        includeBeta: boolean;
+      };
+    }>,
+  downloadAppUpdate: () =>
+    ipcRenderer.invoke("download-app-update") as Promise<{
+      status: "disabled" | "up-to-date" | "update-available" | "downloaded" | "portable" | "error";
+      version?: string;
+      releaseUrl?: string;
+      message?: string;
+      preferences?: {
+        includeBeta: boolean;
+      };
+    }>,
+  installDownloadedAppUpdate: () =>
+    ipcRenderer.invoke("install-downloaded-app-update") as Promise<boolean>,
   onAppCloseRequested: (cb: () => void | Promise<void>) => {
     const listener = () => {
       void cb();

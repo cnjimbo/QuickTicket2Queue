@@ -2,6 +2,7 @@ import { join } from "node:path";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 import { VitePluginDoubleshot } from "vite-plugin-doubleshot";
+import { assertSupportedAppVersion, readAppVersion } from "./scripts/app-version";
 
 import VueRouter from "vue-router/vite";
 import { VueRouterAutoImports } from "vue-router/unplugin";
@@ -18,6 +19,9 @@ const electronPublishMode =
 const lifecycleEvent = process.env.npm_lifecycle_event;
 const isBuildLifecycle = lifecycleEvent === "build";
 const rendererSourcemap: "inline" | false = isBuildLifecycle ? false : "inline";
+const appVersion = readAppVersion(__dirname);
+
+assertSupportedAppVersion(appVersion, `vite ${lifecycleEvent ?? "startup"}`);
 
 // https://vitejs.dev/config/
 export default defineConfig({
