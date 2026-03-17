@@ -8,7 +8,14 @@ const OVERRIDE_RELEASE_TYPE = process.env.ELECTRON_BUILDER_RELEASE_TYPE;
 
 assertSupportedAppVersion(APP_VERSION, "electron-builder");
 
-function getReleaseType(): "release" | "prerelease" {
+function getReleaseType(): "release" | "prerelease" | "draft" {
+  // In GitHub Actions matrix builds, always use draft so parallel OS jobs only
+  // upload assets without racing to finalize the release. The finalize_release
+  // job publishes the draft after all matrix jobs complete.
+  if (process.env.GITHUB_ACTIONS === "true" && process.env.ELECTRON_BUILDER_PUBLISH === "always") {
+    return "draft";
+  }
+
   if (OVERRIDE_RELEASE_TYPE === "release" || OVERRIDE_RELEASE_TYPE === "prerelease") {
     return OVERRIDE_RELEASE_TYPE;
   }
