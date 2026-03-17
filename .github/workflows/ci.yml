@@ -60,13 +60,14 @@ jobs:
 
             TAG_NAME="v$RELEASE_VERSION"
           else
-            PRERELEASE="false"
-            RELEASE_TYPE="release"
             TAG_NAME="v$RELEASE_VERSION-$SANITIZED_BRANCH"
-
-            if ! printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
+            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
+              PRERELEASE="true"
+              RELEASE_TYPE="prerelease"
+            else
+              PRERELEASE="false"
               SHOULD_TAG="false"
-              SKIP_REASON="非 main 分支仅允许在 package.json 使用 `x.y.z-alpha.N` 或 `x.y.z-beta.N` 格式发布，例如 `0.0.9-alpha.1` 或 `0.0.9-beta.1`。当前仅提示，不执行发布。"
+              SKIP_REASON="非 main 分支仅允许发布 prerelease，版本号必须为 `x.y.z-alpha.N` 或 `x.y.z-beta.N`。"
             fi
           fi
 
