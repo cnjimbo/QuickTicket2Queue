@@ -15,6 +15,9 @@ const devUrlInput = ref('')
 const skipBeforeUnloadPrompt = ref(false)
 const isCheckingForUpdates = ref(false)
 const isDownloadingUpdate = ref(false)
+const isLoadingUpdatePreferences = ref(false)
+const isSavingUpdatePreferences = ref(false)
+const includeBetaUpdates = ref(false)
 const currentVersion = ref('')
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
@@ -249,6 +252,40 @@ async function handleCheckForUpdates() {
   }
 }
 
+async function loadUpdatePreferences() {
+  isLoadingUpdatePreferences.value = true
+  try {
+    const preferences = await window.electron.getUpdatePreferences()
+    includeBetaUpdates.value = preferences.includeBeta
+  } catch {
+    includeBetaUpdates.value = false
+  } finally {
+    isLoadingUpdatePreferences.value = false
+  }
+}
+
+async function handleUpdatePreferenceChange(value: string | number | boolean) {
+  if (isSavingUpdatePreferences.value) return
+
+  const nextValue = Boolean(value)
+  const previousValue = includeBetaUpdates.value
+  isSavingUpdatePreferences.value = true
+  try {
+    const preferences = await window.electron.setUpdatePreferences({ includeBeta: nextValue })
+    includeBetaUpdates.value = preferences.includeBeta
+  } catch {
+    includeBetaUpdates.value = previousValue
+    await window.electron.showNativeDialog({
+      title: '保存更新设置失败',
+      message: '保存“接收 Beta 版本更新”设置失败，请稍后重试。',
+      buttons: ['确定'],
+      type: 'error',
+    })
+  } finally {
+    isSavingUpdatePreferences.value = false
+  }
+}
+
 async function handleAppCloseRequested() {
   const decision = await getDraftLeaveDecision({
     actionLabel: '退出程序',
@@ -278,6 +315,8 @@ onMounted(() => {
   }).catch(() => {
     currentVersion.value = ''
   })
+
+  void loadUpdatePreferences()
 
   stopTopToolbarSync = window.electron.onTopToolbarVisibilityChanged((visible) => {
     showTopToolbar.value = visible
@@ -343,6 +382,12 @@ const navLinks = computed(() => {
             {{ isDownloadingUpdate ? '下载更新中...' : isCheckingForUpdates ? '检查更新中...' : '检查更新' }}
           </button>
           <div v-if="link.to.includes('/help')" class="update-version">当前版本 {{ currentVersion || '-' }}</div>
+          <div v-if="link.to.includes('/help')" class="update-beta-toggle">
+            <span class="update-beta-toggle__label">接收 Beta 版本更新</span>
+            <el-switch :model-value="includeBetaUpdates" size="small"
+              :loading="isLoadingUpdatePreferences || isSavingUpdatePreferences" inline-prompt active-text="开"
+              inactive-text="关" @change="handleUpdatePreferenceChange" />
+          </div>
         </template>
       </nav>
     </aside>
@@ -483,6 +528,21 @@ const navLinks = computed(() => {
   margin-top: -2px;
   margin-bottom: 4px;
   padding: 0 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.update-beta-toggle {
+  margin-top: -2px;
+  margin-bottom: 8px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.update-beta-toggle__label {
   font-size: 12px;
   color: #94a3b8;
 }
