@@ -176,38 +176,10 @@ jobs:
           node-version: 24.x
           cache: pnpm
 
-      - name: Prepare temporary workspace
-        id: prepare_temp_workspace
-        shell: bash
-        run: |
-          if command -v cygpath >/dev/null 2>&1; then
-            RUNNER_TEMP_BASH=$(cygpath -u "$RUNNER_TEMP")
-          else
-            RUNNER_TEMP_BASH="$RUNNER_TEMP"
-          fi
-
-          TEMP_DIR="$RUNNER_TEMP_BASH/qt2q-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.os }}"
-          rm -rf "$TEMP_DIR"
-          mkdir -p "$TEMP_DIR"
-
-          # Export tracked files of current commit into a clean temporary workspace.
-          git archive --format=tar HEAD | tar -x -C "$TEMP_DIR"
-
-          if command -v cygpath >/dev/null 2>&1; then
-            TEMP_DIR_NATIVE=$(cygpath -w "$TEMP_DIR")
-          else
-            TEMP_DIR_NATIVE="$TEMP_DIR"
-          fi
-
-          echo "temp_dir=$TEMP_DIR" >> "$GITHUB_OUTPUT"
-          echo "temp_dir_native=$TEMP_DIR_NATIVE" >> "$GITHUB_OUTPUT"
-
       - name: Install
-        working-directory: ${{ steps.prepare_temp_workspace.outputs.temp_dir_native }}
         run: pnpm i
 
       - name: Build and publish
-        working-directory: ${{ steps.prepare_temp_workspace.outputs.temp_dir_native }}
         env:
           ELECTRON_BUILDER_PUBLISH: always
           ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.auto_tag_release.outputs.publish_tag_prefix }}
