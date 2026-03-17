@@ -66,7 +66,7 @@ if (!shouldSignAndEditExecutable) {
 
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
-  productName: "Quick Ticket to Queue",
+  productName: "quickticket2queue",
   asar: true,
   compression: "maximum",
   electronLanguages: ["en-US", "zh-CN"],
@@ -76,8 +76,8 @@ const config: Configuration = {
   ...getPublishConfig(),
   npmRebuild: true,
   win: {
-    // target: ["nsis", "zip"],
-    target: ["dir"],
+    target: ["nsis", "zip"],
+    // target: ["dir"],electron-builder
     executableName: "quickticket2queue",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
     signAndEditExecutable: shouldSignAndEditExecutable,

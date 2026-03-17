@@ -17,7 +17,7 @@
     "debug": "vite -- --dsb-debug",
     "prebuild": "pnpm run gen:ipc",
     "build": "pnpm run clean && vite build",
-    "dist:win": "electron-builder --config electron-builder.config.ts --win nsis",
+    "dist:win:local": "electron-builder --config electron-builder.config.ts --win dir",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
