@@ -42,10 +42,10 @@ jobs:
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          SANITIZED_BRANCH=$(printf '%s' "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9-]#-#g' | sed 's#-\{2,\}#-#g' | sed 's#^-##; s#-$##')
           RELEASE_VERSION="$CURRENT_VERSION"
           SKIP_REASON=""
           RELEASE_TYPE="release"
+          TAG_NAME="v$RELEASE_VERSION"
           STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
           PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$'
 
@@ -61,10 +61,7 @@ jobs:
               SHOULD_TAG="false"
               SKIP_REASON="main 分支版本号不符合发布规则。仅接受 `x.y.z`、`x.y.z-alpha.N`、`x.y.z-beta.N` 三种格式。"
             fi
-
-            TAG_NAME="v$RELEASE_VERSION"
           else
-            TAG_NAME="v$RELEASE_VERSION-$SANITIZED_BRANCH"
             if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
               PRERELEASE="true"
               RELEASE_TYPE="prerelease"
