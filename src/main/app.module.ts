@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { ElectronModule } from "@doubleshot/nest-electron";
 import { Module } from "@nestjs/common";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
@@ -154,8 +155,7 @@ const SHOW_NATIVE_DIALOG_CHANNEL = "show-native-dialog";
 
         const URL = !isPackaged
           ? process.env.DS_RENDERER_URL
-          : `file://${join(app.getAppPath(), "dist/render/index.html#/")}`;
-
+          : `${pathToFileURL(join(app.getAppPath(), "dist/render/index.html")).toString()}#/`;
         win.loadURL(URL!);
 
         return { win };

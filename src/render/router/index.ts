@@ -1,4 +1,4 @@
-import { createWebHistory } from "vue-router";
+import { createWebHashHistory } from "vue-router";
 // import { experimental_createRouter as createRouter } from 'vue-router/experimental'
 // import { resolver, handleHotUpdate } from 'vue-router/auto-resolver'
 import { createRouter } from "vue-router";
@@ -11,13 +11,13 @@ const safeRoutes = routes.filter(
 );
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   // resolver,
   routes: safeRoutes,
 });
 
 router.beforeEach((to) => {
-  if (to.path === "/") {
+  if (to.path === "/" || to.matched.length === 0) {
     return { path: "/ticket/ticket", query: to.query };
   }
 
@@ -26,4 +26,4 @@ router.beforeEach((to) => {
 
 if (import.meta.hot) {
   handleHotUpdate(router);
-}
+} 

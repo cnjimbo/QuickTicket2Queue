@@ -1,6 +1,8 @@
 import type { MicroserviceOptions } from "@nestjs/microservices";
 import { ElectronIpcTransport } from "@doubleshot/nest-electron";
 import { NestFactory } from "@nestjs/core";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { app, BrowserWindow, dialog, Menu, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { AppModule } from "./app.module";
@@ -10,6 +12,7 @@ process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 
 const DEFAULT_GITHUB_REPOSITORY = "cnjimbo/QuickTicket2Queue";
 const TOP_TOOLBAR_VISIBILITY_CHANNEL = "top-toolbar-visibility-changed";
+const ENABLE_DEV_UPDATER = process.env.ELECTRON_ENABLE_DEV_UPDATER === "true";
 let showTopToolbar = false;
 
 function broadcastTopToolbarVisibility(visible: boolean): void {
@@ -91,7 +94,25 @@ async function resolveReachableReleaseUrl(): Promise<string> {
 }
 
 function setupAutoUpdater() {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged && !ENABLE_DEV_UPDATER) return;
+
+  if (!app.isPackaged && ENABLE_DEV_UPDATER) {
+    const devUpdateConfigPath = join(process.cwd(), "dev-app-update.yml");
+    if (!existsSync(devUpdateConfigPath)) {
+      console.warn(
+        `[Update] Dev updater config not found: ${devUpdateConfigPath}. ` +
+        "Create dev-app-update.yml in project root to enable update debugging.",
+      );
+      return;
+    }
+
+    // Required by electron-updater to load dev-app-update.yml in development.
+    autoUpdater.updateConfigPath = devUpdateConfigPath;
+    autoUpdater.forceDevUpdateConfig = true;
+    console.log(
+      `[Update] Dev updater mode enabled (ELECTRON_ENABLE_DEV_UPDATER=true), config=${devUpdateConfigPath}`,
+    );
+  }
 
   const strategy = resolveUpdateStrategy();
   const isPortableManual = strategy === "portable-manual";

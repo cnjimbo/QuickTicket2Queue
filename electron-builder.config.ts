@@ -19,8 +19,16 @@ function getGitHubRepository(): { owner: string; repo: string } {
 }
 
 function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, never> {
+  const localUpdateTest = process.env.ELECTRON_BUILDER_LOCAL_UPDATE_TEST === "true";
   const wantsPublish = process.env.ELECTRON_BUILDER_PUBLISH === "always";
   const hasGitHubToken = Boolean(process.env.GH_TOKEN);
+  const shouldIncludePublishConfig = localUpdateTest || wantsPublish;
+
+  if (localUpdateTest) {
+    console.warn(
+      " ⚠️  ELECTRON_BUILDER_LOCAL_UPDATE_TEST=true: generating update config for local testing without publishing.",
+    );
+  }
 
   if (wantsPublish && !hasGitHubToken) {
     console.warn(
@@ -28,7 +36,11 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
     );
   }
 
-  if (!wantsPublish || !hasGitHubToken) {
+  if (!shouldIncludePublishConfig) {
+    return {};
+  }
+
+  if (wantsPublish && !hasGitHubToken) {
     return {};
   }
 
@@ -41,6 +53,22 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
         owner,
         repo,
         releaseType: "release",
+      },
+    ],
+  };
+}
+
+function getLocalUpdateTestResources(): Pick<Configuration, "extraResources"> | Record<string, never> {
+  const localUpdateTest = process.env.ELECTRON_BUILDER_LOCAL_UPDATE_TEST === "true";
+  if (!localUpdateTest) {
+    return {};
+  }
+
+  return {
+    extraResources: [
+      {
+        from: "dev-app-update.yml",
+        to: "app-update.yml",
       },
     ],
   };
@@ -67,17 +95,18 @@ if (!shouldSignAndEditExecutable) {
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
   productName: "quickticket2queue",
-  asar: true,
+  asar: false,
   compression: "maximum",
   electronLanguages: ["en-US", "zh-CN"],
   directories: {
     output: "build",
   },
   ...getPublishConfig(),
+  ...getLocalUpdateTestResources(),
   npmRebuild: true,
   win: {
-    target: ["nsis", "zip"],
-    // target: ["dir"],electron-builder
+    // target: ["nsis", "zip"],
+    target: ["dir"],
     executableName: "quickticket2queue",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
     signAndEditExecutable: shouldSignAndEditExecutable,

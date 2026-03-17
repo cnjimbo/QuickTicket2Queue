@@ -1,0 +1,4 @@
+provider: github
+owner: cnjimbo
+repo: QuickTicket2Queue
+updaterCacheDirName: quickticket2queue-updater
