@@ -4,7 +4,7 @@ import { assertSupportedAppVersion, readAppVersion } from "./scripts/app-version
 const DEFAULT_GITHUB_REPOSITORY = "cnjimbo/QuickTicket2Queue";
 const APP_VERSION = readAppVersion(__dirname);
 const IS_PRERELEASE_VERSION = /-/.test(APP_VERSION);
-const OVERRIDE_RELEASE_TYPE = process.env.ELECTRON_BUILDER_RELEASE_TYPE;
+const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
 
 assertSupportedAppVersion(APP_VERSION, "electron-builder");
 
@@ -12,12 +12,8 @@ function getReleaseType(): "release" | "prerelease" | "draft" {
   // In GitHub Actions matrix builds, always use draft so parallel OS jobs only
   // upload assets without racing to finalize the release. The finalize_release
   // job publishes the draft after all matrix jobs complete.
-  if (process.env.ELECTRON_BUILDER_PUBLISH === "always") {
+  if (isPublishBuild) {
     return "draft";
-  }
-
-  if (OVERRIDE_RELEASE_TYPE === "release" || OVERRIDE_RELEASE_TYPE === "prerelease") {
-    return OVERRIDE_RELEASE_TYPE;
   }
 
   return IS_PRERELEASE_VERSION ? "prerelease" : "release";
@@ -40,8 +36,7 @@ function getGitHubRepository(): { owner: string; repo: string } {
 }
 
 function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, never> {
-  const wantsPublish = process.env.ELECTRON_BUILDER_PUBLISH === "always";
-  if (!wantsPublish) {
+  if (!isPublishBuild) {
     return {};
   }
 
@@ -60,7 +55,6 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
 }
 
 const shouldDisableWindowsSigning = isWindowsDomainEnvironment();
-const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
 const shouldSignAndEditExecutable =
   process.platform === "win32" &&
   !shouldDisableWindowsSigning &&
