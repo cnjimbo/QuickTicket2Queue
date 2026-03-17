@@ -1,10 +1,11 @@
 import type { MicroserviceOptions } from "@nestjs/microservices";
 import { ElectronIpcTransport } from "@doubleshot/nest-electron";
 import { NestFactory } from "@nestjs/core";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, dialog, Menu, shell } from "electron";
-import { autoUpdater } from "electron-updater";
+import { app, BrowserWindow, ipcMain, Menu } from "electron";
+import Store from "electron-store";
+import { autoUpdater, type UpdateInfo } from "electron-updater";
 import { AppModule } from "./app.module";
 import { buildMenuTemplate } from "./buildMenuTemplate";
 import 'reflect-metadata';
@@ -13,7 +14,34 @@ process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 const DEFAULT_GITHUB_REPOSITORY = "cnjimbo/QuickTicket2Queue";
 const TOP_TOOLBAR_VISIBILITY_CHANNEL = "top-toolbar-visibility-changed";
 const ENABLE_DEV_UPDATER = process.env.ELECTRON_ENABLE_DEV_UPDATER === "true";
+const CHECK_FOR_APP_UPDATES_CHANNEL = "check-for-app-updates";
+const DOWNLOAD_APP_UPDATE_CHANNEL = "download-app-update";
+const INSTALL_DOWNLOADED_APP_UPDATE_CHANNEL = "install-downloaded-app-update";
+const GET_APP_VERSION_CHANNEL = "get-app-version";
+const GET_UPDATE_PREFERENCES_CHANNEL = "get-update-preferences";
+const SET_UPDATE_PREFERENCES_CHANNEL = "set-update-preferences";
 let showTopToolbar = false;
+
+type UpdatePreferences = {
+  includeBeta: boolean;
+};
+
+type ManualUpdateResult = {
+  status: "disabled" | "up-to-date" | "update-available" | "downloaded" | "portable" | "error";
+  version?: string;
+  releaseUrl?: string;
+  message?: string;
+  preferences?: UpdatePreferences;
+};
+
+let availableUpdateInfo: UpdateInfo | null = null;
+let downloadedUpdateInfo: UpdateInfo | null = null;
+const updatePreferencesStore = new Store<UpdatePreferences>({
+  name: "update-preferences",
+  defaults: {
+    includeBeta: false,
+  },
+});
 
 function broadcastTopToolbarVisibility(visible: boolean): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -25,77 +53,209 @@ function isPortableWindowsBuild(): boolean {
   return process.platform === "win32" && Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
 }
 
-type UpdateStrategy = "installer-auto" | "portable-manual";
-
-function resolveUpdateStrategy(): UpdateStrategy {
-  if (isPortableWindowsBuild()) {
-    return "portable-manual";
-  }
-
-  return "installer-auto";
+function getUpdatePreferences(): UpdatePreferences {
+  return {
+    includeBeta: updatePreferencesStore.get("includeBeta", false),
+  };
 }
 
-function getGitHubReleasesUrl(): string {
+function applyUpdatePreferences(preferences = getUpdatePreferences()): UpdatePreferences {
+  autoUpdater.allowPrerelease = preferences.includeBeta;
+  autoUpdater.channel = preferences.includeBeta ? "beta" : "latest";
+  return preferences;
+}
+
+function updateReleaseStateForPreferenceChange(): void {
+  availableUpdateInfo = null;
+  downloadedUpdateInfo = null;
+}
+
+function getGitHubReleasesUrl(includeBeta = getUpdatePreferences().includeBeta): string {
   const repository = process.env.GITHUB_REPOSITORY || DEFAULT_GITHUB_REPOSITORY;
-  return `https://github.com/${repository}/releases/latest`;
+  return includeBeta
+    ? `https://github.com/${repository}/releases`
+    : `https://github.com/${repository}/releases/latest`;
 }
 
-function getReleaseMirrorUrls(): string[] {
-  const primary = getGitHubReleasesUrl();
-  const customMirror = process.env.UPDATE_RELEASE_MIRROR_URL?.trim();
-
-  const mirrors = [
-    primary,
-    primary.replace("github.com", "cdn.jsdelivr.net/gh"),
-    // Common GitHub proxy/mirror endpoints for regions with restricted access.
-    `https://ghproxy.com/${primary}`,
-    `https://gh.llkk.cc/${primary}`,
-  ];
-
-  if (customMirror) {
-    mirrors.unshift(customMirror);
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
   }
 
-  return [...new Set(mirrors)];
+  return String(error);
 }
 
-async function resolveReachableReleaseUrl(): Promise<string> {
-  const candidates = getReleaseMirrorUrls();
-  const TIMEOUT_MS = 5000;
+async function handleCheckForAppUpdates(): Promise<ManualUpdateResult> {
+  const preferences = applyUpdatePreferences();
 
-  // Helper: Execute promise with timeout using Promise.race()
-  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
-    Promise.race<T>([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
-      ),
-    ]);
+  if (!app.isPackaged && !ENABLE_DEV_UPDATER) {
+    return {
+      status: "disabled",
+      message: "自动更新仅在打包环境或开发调试开关启用时可用。",
+      releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+      preferences,
+    };
+  }
 
-  const fetchTasks = candidates.map((url) =>
-    withTimeout(
-      fetch(url, { method: "HEAD", redirect: "follow" })
-        .then((response) => ({ url, reachable: response.ok })),
-      TIMEOUT_MS
-    ).catch(() => ({ url, reachable: false }))
-  );
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    const updateInfo = result?.updateInfo ?? availableUpdateInfo;
+    const currentVersion = app.getVersion();
 
-  const results = await Promise.allSettled(fetchTasks);
-
-  for (const result of results) {
-    if (result.status === "fulfilled" && result.value.reachable) {
-      console.log(`[Update] Release URL resolved: ${result.value.url}`);
-      return result.value.url;
+    if (!updateInfo || updateInfo.version === currentVersion) {
+      availableUpdateInfo = null;
+      downloadedUpdateInfo = null;
+      return {
+        status: "up-to-date",
+        version: currentVersion,
+        releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+        preferences,
+      };
     }
+
+    availableUpdateInfo = updateInfo;
+
+    if (isPortableWindowsBuild()) {
+      return {
+        status: "portable",
+        version: updateInfo.version,
+        releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+        preferences,
+      };
+    }
+
+    if (downloadedUpdateInfo?.version === updateInfo.version) {
+      return {
+        status: "downloaded",
+        version: updateInfo.version,
+        releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+        preferences,
+      };
+    }
+
+    return {
+      status: "update-available",
+      version: updateInfo.version,
+      releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+      preferences,
+    };
+  } catch (error) {
+    const message = getErrorMessage(error);
+    console.error("Failed to check for updates:", error);
+    return {
+      status: "error",
+      message,
+      releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+      preferences,
+    };
+  }
+}
+
+async function handleDownloadAppUpdate(): Promise<ManualUpdateResult> {
+  const preferences = applyUpdatePreferences();
+
+  if (isPortableWindowsBuild()) {
+    return {
+      status: "portable",
+      version: availableUpdateInfo?.version,
+      releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+      preferences,
+    };
   }
 
-  console.warn(`[Update] All mirrors unreachable, using primary: ${candidates[0]}`);
-  return candidates[0];
+  try {
+    if (!availableUpdateInfo) {
+      const checkResult = await handleCheckForAppUpdates();
+      if (checkResult.status !== "update-available" && checkResult.status !== "downloaded") {
+        return checkResult;
+      }
+    }
+
+    if (!availableUpdateInfo) {
+      return {
+        status: "up-to-date",
+        version: app.getVersion(),
+        releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+        preferences,
+      };
+    }
+
+    await autoUpdater.downloadUpdate();
+    downloadedUpdateInfo = availableUpdateInfo;
+
+    return {
+      status: "downloaded",
+      version: downloadedUpdateInfo.version,
+      releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+      preferences,
+    };
+  } catch (error) {
+    const message = getErrorMessage(error);
+    console.error("Failed to download update:", error);
+    return {
+      status: "error",
+      message,
+      version: availableUpdateInfo?.version,
+      releaseUrl: getGitHubReleasesUrl(preferences.includeBeta),
+      preferences,
+    };
+  }
+}
+
+async function handleGetUpdatePreferences(): Promise<UpdatePreferences> {
+  return getUpdatePreferences();
+}
+
+function getCurrentAppVersion(): string {
+  if (app.isPackaged) {
+    return app.getVersion();
+  }
+
+  try {
+    const packageJsonPath = join(process.cwd(), "package.json");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: unknown };
+    if (typeof packageJson.version === "string" && packageJson.version.trim()) {
+      return packageJson.version.trim();
+    }
+  } catch (error) {
+    console.warn("[Version] Failed to read package.json version in dev mode:", error);
+  }
+
+  return app.getVersion();
+}
+
+async function handleGetAppVersion(): Promise<string> {
+  return getCurrentAppVersion();
+}
+
+async function handleSetUpdatePreferences(
+  _event: Electron.IpcMainInvokeEvent,
+  partialPreferences: Partial<UpdatePreferences> | undefined,
+): Promise<UpdatePreferences> {
+  const nextPreferences: UpdatePreferences = {
+    includeBeta: Boolean(partialPreferences?.includeBeta),
+  };
+
+  updatePreferencesStore.set(nextPreferences);
+  applyUpdatePreferences(nextPreferences);
+  updateReleaseStateForPreferenceChange();
+  return nextPreferences;
+}
+
+async function handleInstallDownloadedAppUpdate(): Promise<boolean> {
+  if (!downloadedUpdateInfo || isPortableWindowsBuild()) {
+    return false;
+  }
+
+  setImmediate(() => {
+    autoUpdater.quitAndInstall();
+  });
+
+  return true;
 }
 
 function setupAutoUpdater() {
-  if (!app.isPackaged && !ENABLE_DEV_UPDATER) return;
-
+  // Configure dev-app-update.yml path for development if available
   if (!app.isPackaged && ENABLE_DEV_UPDATER) {
     const devUpdateConfigPath = join(process.cwd(), "dev-app-update.yml");
     if (!existsSync(devUpdateConfigPath)) {
@@ -103,98 +263,50 @@ function setupAutoUpdater() {
         `[Update] Dev updater config not found: ${devUpdateConfigPath}. ` +
         "Create dev-app-update.yml in project root to enable update debugging.",
       );
-      return;
+    } else {
+      // Required by electron-updater to load dev-app-update.yml in development.
+      autoUpdater.updateConfigPath = devUpdateConfigPath;
+      autoUpdater.forceDevUpdateConfig = true;
+      console.log(
+        `[Update] Dev updater mode enabled (ELECTRON_ENABLE_DEV_UPDATER=true), config=${devUpdateConfigPath}`,
+      );
     }
-
-    // Required by electron-updater to load dev-app-update.yml in development.
-    autoUpdater.updateConfigPath = devUpdateConfigPath;
-    autoUpdater.forceDevUpdateConfig = true;
-    console.log(
-      `[Update] Dev updater mode enabled (ELECTRON_ENABLE_DEV_UPDATER=true), config=${devUpdateConfigPath}`,
-    );
   }
 
-  const strategy = resolveUpdateStrategy();
-  const isPortableManual = strategy === "portable-manual";
-  let releaseUrlPromise: Promise<string> | null = null;
-  const getReleaseUrl = () => {
-    if (!releaseUrlPromise) {
-      releaseUrlPromise = resolveReachableReleaseUrl();
-    }
-    return releaseUrlPromise;
-  };
-
-  autoUpdater.autoDownload = !isPortableManual;
-  autoUpdater.autoInstallOnAppQuit = !isPortableManual;
+  // Always apply preferences and set autoUpdater options
+  applyUpdatePreferences();
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on("error", (error) => {
     console.error("Auto update error:", error);
   });
 
-  autoUpdater.on("update-available", async (info) => {
+  autoUpdater.on("update-available", (info) => {
+    availableUpdateInfo = info;
+    downloadedUpdateInfo = null;
     console.log("Update available:", info.version);
-
-    if (!isPortableManual) return;
-
-    const releasesUrl = await getReleaseUrl();
-    const { response } = await dialog.showMessageBox({
-      type: "info",
-      buttons: ["Download", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Available",
-      message: `A new version (${info.version}) is available.`,
-      detail: "Portable builds do not support in-place auto install. Open release page to download the latest portable package (GitHub/CDN fallback).",
-    });
-
-    if (response === 0) {
-      await shell.openExternal(releasesUrl);
-    }
   });
 
   autoUpdater.on("update-not-available", () => {
+    availableUpdateInfo = null;
+    downloadedUpdateInfo = null;
     console.log("No updates available");
   });
 
-  autoUpdater.on("update-downloaded", async () => {
-    if (isPortableManual) return;
-
-    const { response } = await dialog.showMessageBox({
-      type: "info",
-      buttons: ["Restart and Install", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Ready",
-      message: "A new version has been downloaded. Restart now to install it?",
-    });
-
-    if (response === 0) {
-      autoUpdater.quitAndInstall();
-    }
+  autoUpdater.on("update-downloaded", (info) => {
+    downloadedUpdateInfo = info;
+    availableUpdateInfo = info;
+    console.log("Update downloaded:", info.version);
   });
 
-  const checkForUpdates = isPortableManual
-    ? autoUpdater.checkForUpdates()
-    : autoUpdater.checkForUpdatesAndNotify();
-
-  checkForUpdates.catch(async (error) => {
-    console.error("Failed to check for updates:", error);
-
-    const releasesUrl = await getReleaseUrl();
-    const { response } = await dialog.showMessageBox({
-      type: "warning",
-      buttons: ["Open Release Page", "Dismiss"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Check Failed",
-      message: "Unable to check updates via the default channel.",
-      detail: "You can open the release page. If GitHub is unavailable, a CDN mirror will be used automatically.",
-    });
-
-    if (response === 0) {
-      await shell.openExternal(releasesUrl);
-    }
-  });
+  // Always register IPC handlers, even in development mode
+  ipcMain.handle(CHECK_FOR_APP_UPDATES_CHANNEL, handleCheckForAppUpdates);
+  ipcMain.handle(DOWNLOAD_APP_UPDATE_CHANNEL, handleDownloadAppUpdate);
+  ipcMain.handle(INSTALL_DOWNLOADED_APP_UPDATE_CHANNEL, handleInstallDownloadedAppUpdate);
+  ipcMain.handle(GET_APP_VERSION_CHANNEL, handleGetAppVersion);
+  ipcMain.handle(GET_UPDATE_PREFERENCES_CHANNEL, handleGetUpdatePreferences);
+  ipcMain.handle(SET_UPDATE_PREFERENCES_CHANNEL, handleSetUpdatePreferences);
 }
 
 async function electronAppInit() {

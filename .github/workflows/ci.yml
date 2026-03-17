@@ -2,11 +2,11 @@ name: CI
 # test
 on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -16,14 +16,19 @@ env:
 
 jobs:
   auto_tag_release:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
+      branch_name: ${{ steps.version_check.outputs.branch_name }}
       current_version: ${{ steps.version_check.outputs.current_version }}
+      release_version: ${{ steps.version_check.outputs.release_version }}
       tag_name: ${{ steps.version_check.outputs.tag_name }}
       should_tag: ${{ steps.version_check.outputs.should_tag }}
+      skip_reason: ${{ steps.version_check.outputs.skip_reason }}
+      prerelease: ${{ steps.version_check.outputs.prerelease }}
+      release_type: ${{ steps.version_check.outputs.release_type }}
       created: ${{ steps.create_tag.outputs.created }}
       released: ${{ steps.release_status.outputs.released }}
 
@@ -36,63 +41,116 @@ jobs:
         id: version_check
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          TAG_NAME="v$CURRENT_VERSION"
+          BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          RELEASE_VERSION="$CURRENT_VERSION"
+          SKIP_REASON=""
+          RELEASE_TYPE="release"
+          TAG_NAME="v$RELEASE_VERSION"
+          STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
+          PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$'
 
-          git fetch --tags
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            SHOULD_TAG="false"
+          if [ "$BRANCH_NAME" = "main" ]; then
+            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN"; then
+              PRERELEASE="false"
+              RELEASE_TYPE="release"
+            elif printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
+              PRERELEASE="true"
+              RELEASE_TYPE="prerelease"
+            else
+              PRERELEASE="false"
+              SHOULD_TAG="false"
+              SKIP_REASON="main 分支版本号不符合发布规则。仅接受 `x.y.z`、`x.y.z-alpha.N`、`x.y.z-beta.N` 三种格式。"
+            fi
           else
-            SHOULD_TAG="true"
+            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
+              PRERELEASE="true"
+              RELEASE_TYPE="prerelease"
+            else
+              PRERELEASE="false"
+              SHOULD_TAG="false"
+              SKIP_REASON="非 main 分支仅允许发布 prerelease，版本号必须为 `x.y.z-alpha.N` 或 `x.y.z-beta.N`。"
+            fi
           fi
 
+          if [ -z "$SKIP_REASON" ]; then
+            git fetch --tags
+            if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+              SHOULD_TAG="true"
+              OVERWRITE="true"
+            else
+              SHOULD_TAG="true"
+              OVERWRITE="false"
+            fi
+          fi
+
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "should_tag=$SHOULD_TAG" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+          echo "overwrite=${OVERWRITE:-false}" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         id: create_tag
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version_check.outputs.should_tag == 'true'
+        if: github.event_name == 'push' && steps.version_check.outputs.should_tag == 'true'
         env:
           TAG_NAME: ${{ steps.version_check.outputs.tag_name }}
+          OVERWRITE: ${{ steps.version_check.outputs.overwrite }}
         run: |
           git fetch --tags
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "created=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$OVERWRITE" = "true" ]; then
+            git tag -d "$TAG_NAME" || true
+            git push origin ":refs/tags/$TAG_NAME" || true
+          fi
+
           git tag "$TAG_NAME" "$GITHUB_SHA"
           git push origin "$TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub release
+      - name: Create GitHub draft release
         id: create_release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.create_tag.outputs.created == 'true'
+        if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version_check.outputs.tag_name }}
+          name: ${{ steps.version_check.outputs.tag_name }}
           generate_release_notes: true
+          draft: true
+          prerelease: ${{ steps.version_check.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.version_check.outputs.prerelease != 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Mark release creation result
         id: release_status
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.create_tag.outputs.created == 'true'
+        if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
         run: echo "released=true" >> "$GITHUB_OUTPUT"
 
-      - name: Report auto tag decision
-        if: github.event_name == 'pull_request'
+      - name: Report release decision
+        if: always()
         run: |
+          echo "branch_name=${{ steps.version_check.outputs.branch_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "current_version=${{ steps.version_check.outputs.current_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "release_version=${{ steps.version_check.outputs.release_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "tag_name=${{ steps.version_check.outputs.tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "should_tag=${{ steps.version_check.outputs.should_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "prerelease=${{ steps.version_check.outputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "release_type=${{ steps.version_check.outputs.release_type }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.version_check.outputs.skip_reason }}" ]; then
+            echo "skip_reason=${{ steps.version_check.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   release:
     needs: auto_tag_release
     runs-on: ${{ matrix.os }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.auto_tag_release.outputs.released == 'true'
+    if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
     timeout-minutes: 90
     strategy:
       matrix:
@@ -118,7 +176,35 @@ jobs:
       - name: Build and publish
         env:
           ELECTRON_BUILDER_PUBLISH: always
+          ELECTRON_BUILDER_RELEASE_TYPE: ${{ needs.auto_tag_release.outputs.release_type }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
           GITHUB_REF: refs/tags/${{ needs.auto_tag_release.outputs.tag_name }}
         run: pnpm run build
+
+  finalize_release:
+    needs: [auto_tag_release, release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
+          PRERELEASE: ${{ needs.auto_tag_release.outputs.prerelease }}
+        run: |
+          if [ "$PRERELEASE" = "true" ]; then
+            gh release edit "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft=false \
+              --prerelease \
+              --latest=false
+          else
+            gh release edit "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft=false \
+              --no-prerelease \
+              --latest
+          fi

@@ -1,6 +1,27 @@
 import type { Configuration } from "electron-builder";
+import { assertSupportedAppVersion, readAppVersion } from "./scripts/app-version";
 
 const DEFAULT_GITHUB_REPOSITORY = "cnjimbo/QuickTicket2Queue";
+const APP_VERSION = readAppVersion(__dirname);
+const IS_PRERELEASE_VERSION = /-/.test(APP_VERSION);
+const OVERRIDE_RELEASE_TYPE = process.env.ELECTRON_BUILDER_RELEASE_TYPE;
+
+assertSupportedAppVersion(APP_VERSION, "electron-builder");
+
+function getReleaseType(): "release" | "prerelease" | "draft" {
+  // In GitHub Actions matrix builds, always use draft so parallel OS jobs only
+  // upload assets without racing to finalize the release. The finalize_release
+  // job publishes the draft after all matrix jobs complete.
+  if (process.env.ELECTRON_BUILDER_PUBLISH === "always") {
+    return "draft";
+  }
+
+  if (OVERRIDE_RELEASE_TYPE === "release" || OVERRIDE_RELEASE_TYPE === "prerelease") {
+    return OVERRIDE_RELEASE_TYPE;
+  }
+
+  return IS_PRERELEASE_VERSION ? "prerelease" : "release";
+}
 
 function isWindowsDomainEnvironment(): boolean {
   return (
@@ -19,28 +40,8 @@ function getGitHubRepository(): { owner: string; repo: string } {
 }
 
 function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, never> {
-  const localUpdateTest = process.env.ELECTRON_BUILDER_LOCAL_UPDATE_TEST === "true";
   const wantsPublish = process.env.ELECTRON_BUILDER_PUBLISH === "always";
-  const hasGitHubToken = Boolean(process.env.GH_TOKEN);
-  const shouldIncludePublishConfig = localUpdateTest || wantsPublish;
-
-  if (localUpdateTest) {
-    console.warn(
-      " ⚠️  ELECTRON_BUILDER_LOCAL_UPDATE_TEST=true: generating update config for local testing without publishing.",
-    );
-  }
-
-  if (wantsPublish && !hasGitHubToken) {
-    console.warn(
-      " ⚠️  ELECTRON_BUILDER_PUBLISH=always was set but GH_TOKEN is missing. Build will continue with publish disabled.",
-    );
-  }
-
-  if (!shouldIncludePublishConfig) {
-    return {};
-  }
-
-  if (wantsPublish && !hasGitHubToken) {
+  if (!wantsPublish) {
     return {};
   }
 
@@ -52,29 +53,14 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
         provider: "github",
         owner,
         repo,
-        releaseType: "release",
-      },
-    ],
-  };
-}
-
-function getLocalUpdateTestResources(): Pick<Configuration, "extraResources"> | Record<string, never> {
-  const localUpdateTest = process.env.ELECTRON_BUILDER_LOCAL_UPDATE_TEST === "true";
-  if (!localUpdateTest) {
-    return {};
-  }
-
-  return {
-    extraResources: [
-      {
-        from: "dev-app-update.yml",
-        to: "app-update.yml",
+        releaseType: getReleaseType(),
       },
     ],
   };
 }
 
 const shouldDisableWindowsSigning = isWindowsDomainEnvironment();
+const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
 const shouldSignAndEditExecutable =
   process.platform === "win32" &&
   !shouldDisableWindowsSigning &&
@@ -94,20 +80,19 @@ if (!shouldSignAndEditExecutable) {
 
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
-  productName: "quickticket2queue",
-  asar: false,
+  productName: "Quick Ticket to Queue",
+  asar: isPublishBuild,
+  generateUpdatesFilesForAllChannels: true,
   compression: "maximum",
   electronLanguages: ["en-US", "zh-CN"],
   directories: {
     output: "build",
   },
   ...getPublishConfig(),
-  ...getLocalUpdateTestResources(),
   npmRebuild: true,
   win: {
-    // target: ["nsis", "zip"],
-    target: ["dir"],
-    executableName: "quickticket2queue",
+    target: isPublishBuild ? ["nsis"] : ["dir"],
+    executableName: "t2q",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
     signAndEditExecutable: shouldSignAndEditExecutable,
     icon: "assets/icons/icon-512.png",

@@ -1,57 +1,81 @@
 name: DeleteOldWorkflows
 
 on:
-  # push:
-  #  branches:
-  #    [ master ]
-
+  # 手动触发：可灵活指定删除参数
   workflow_dispatch:
     inputs:
       days:
-        description: Number of days.
+        description: "Number of days to retain: 0=keep all, 30=keep last 30 days"
         required: true
-        default: '0'
+        default: "30"
       minimum_runs:
-        description: The minimum runs to keep for each workflow.
+        description: "Minimum runs to keep per workflow (e.g. 1=keep at least 1 run)"
         required: true
-        default: '1'
+        default: "1"
       delete_workflow_pattern:
-        description: The name or filename of the workflow. if not set then it will target all workflows.
+        description: "Optional: target specific workflow by name/filename. Leave empty to target all workflows"
         required: false
+        default: ""
       delete_workflow_by_state_pattern:
-        description: 'Remove workflow by state: active, deleted, disabled_fork, disabled_inactivity, disabled_manually'
+        description: "Optional: filter by state (active, deleted, disabled_fork, disabled_inactivity, disabled_manually)"
         required: false
       dry_run:
-        description: 'Only log actions, do not perform any delete operations.'
+        description: "Dry run: only log actions without deleting"
         required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
+  # 每周日午夜清理一次：保留最近30天的所有 workflow 运行
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * 0"
 
 permissions: write-all
 
 jobs:
-  deleteworkflow:
-    name: delete all logs
+  delete_workflow_runs:
+    name: Clean up old workflow runs
     runs-on: ubuntu-latest
     steps:
-      - name: Delete Workflow Runs
-        id: del_workflows
+      - name: Determine cleanup parameters
+        id: params
+        run: |
+          # Use workflow_dispatch inputs if provided, otherwise use schedule defaults
+          DAYS="${{ github.event.inputs.days || '30' }}"
+          MIN_RUNS="${{ github.event.inputs.minimum_runs || '1' }}"
+          PATTERN="${{ github.event.inputs.delete_workflow_pattern }}"
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+
+          echo "days=$DAYS" >> "$GITHUB_OUTPUT"
+          echo "min_runs=$MIN_RUNS" >> "$GITHUB_OUTPUT"
+          echo "pattern=$PATTERN" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+          echo "=== Cleanup Policy ===" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Retain: last $DAYS days" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Keep minimum: $MIN_RUNS runs per workflow" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Target: ${PATTERN:-all workflows}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry run: $DRY_RUN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@86d29a75093353c4c509a876c176234037c2025b # v2
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: ${{ github.event.inputs.days || 0 }}
-          keep_minimum_runs: ${{ github.event.inputs.minimum_runs || 1 }}
-          delete_workflow_pattern: ${{ github.event.inputs.delete_workflow_pattern }}
+          retain_days: ${{ steps.params.outputs.days }}
+          keep_minimum_runs: ${{ steps.params.outputs.min_runs }}
+          delete_workflow_pattern: ${{ steps.params.outputs.pattern }}
           delete_workflow_by_state_pattern: ${{ github.event.inputs.delete_workflow_by_state_pattern }}
-          dry_run: ${{ github.event.inputs.dry_run }}
+          dry_run: ${{ steps.params.outputs.dry_run }}
 
-      - name: Delete self
-        id: delself
+      - name: Clean up this workflow (keep last 5 runs for audit)
         uses: Mattraks/delete-workflow-runs@86d29a75093353c4c509a876c176234037c2025b # v2
         with:
           token: ${{ github.token }}
+          repository: ${{ github.repository }}
           retain_days: 0
-          keep_minimum_runs: 0
-          delete_workflow_pattern: delete Old Workflows
+          keep_minimum_runs: 5
+          delete_workflow_pattern: DeleteOldWorkflows
+          dry_run: "false"

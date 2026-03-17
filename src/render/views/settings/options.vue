@@ -94,7 +94,6 @@ const { execute: executeDeleteOption } = useAsyncState(
     undefined,
     { immediate: false, resetOnExecute: false, throwError: true },
 )
-
 const newOption = reactive<TicketQueueOption>({
     des: '',
     queue: '',
