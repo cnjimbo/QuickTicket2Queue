@@ -1,7 +1,7 @@
 import type { MicroserviceOptions } from "@nestjs/microservices";
 import { ElectronIpcTransport } from "@doubleshot/nest-electron";
 import { NestFactory } from "@nestjs/core";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import Store from "electron-store";
@@ -17,6 +17,7 @@ const ENABLE_DEV_UPDATER = process.env.ELECTRON_ENABLE_DEV_UPDATER === "true";
 const CHECK_FOR_APP_UPDATES_CHANNEL = "check-for-app-updates";
 const DOWNLOAD_APP_UPDATE_CHANNEL = "download-app-update";
 const INSTALL_DOWNLOADED_APP_UPDATE_CHANNEL = "install-downloaded-app-update";
+const GET_APP_VERSION_CHANNEL = "get-app-version";
 const GET_UPDATE_PREFERENCES_CHANNEL = "get-update-preferences";
 const SET_UPDATE_PREFERENCES_CHANNEL = "set-update-preferences";
 let showTopToolbar = false;
@@ -205,6 +206,28 @@ async function handleGetUpdatePreferences(): Promise<UpdatePreferences> {
   return getUpdatePreferences();
 }
 
+function getCurrentAppVersion(): string {
+  if (app.isPackaged) {
+    return app.getVersion();
+  }
+
+  try {
+    const packageJsonPath = join(process.cwd(), "package.json");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: unknown };
+    if (typeof packageJson.version === "string" && packageJson.version.trim()) {
+      return packageJson.version.trim();
+    }
+  } catch (error) {
+    console.warn("[Version] Failed to read package.json version in dev mode:", error);
+  }
+
+  return app.getVersion();
+}
+
+async function handleGetAppVersion(): Promise<string> {
+  return getCurrentAppVersion();
+}
+
 async function handleSetUpdatePreferences(
   _event: Electron.IpcMainInvokeEvent,
   partialPreferences: Partial<UpdatePreferences> | undefined,
@@ -281,6 +304,7 @@ function setupAutoUpdater() {
   ipcMain.handle(CHECK_FOR_APP_UPDATES_CHANNEL, handleCheckForAppUpdates);
   ipcMain.handle(DOWNLOAD_APP_UPDATE_CHANNEL, handleDownloadAppUpdate);
   ipcMain.handle(INSTALL_DOWNLOADED_APP_UPDATE_CHANNEL, handleInstallDownloadedAppUpdate);
+  ipcMain.handle(GET_APP_VERSION_CHANNEL, handleGetAppVersion);
   ipcMain.handle(GET_UPDATE_PREFERENCES_CHANNEL, handleGetUpdatePreferences);
   ipcMain.handle(SET_UPDATE_PREFERENCES_CHANNEL, handleSetUpdatePreferences);
 }

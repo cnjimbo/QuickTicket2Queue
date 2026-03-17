@@ -12,7 +12,7 @@ function getReleaseType(): "release" | "prerelease" | "draft" {
   // In GitHub Actions matrix builds, always use draft so parallel OS jobs only
   // upload assets without racing to finalize the release. The finalize_release
   // job publishes the draft after all matrix jobs complete.
-  if (process.env.GITHUB_ACTIONS === "true" && process.env.ELECTRON_BUILDER_PUBLISH === "always") {
+  if (process.env.ELECTRON_BUILDER_PUBLISH === "always") {
     return "draft";
   }
 
@@ -61,7 +61,6 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
 
 const shouldDisableWindowsSigning = isWindowsDomainEnvironment();
 const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
-const isGitHubBuild = Boolean(process.env.GITHUB_ACTIONS);
 const shouldSignAndEditExecutable =
   process.platform === "win32" &&
   !shouldDisableWindowsSigning &&
@@ -81,8 +80,8 @@ if (!shouldSignAndEditExecutable) {
 
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
-  productName: "quickticket2queue",
-  asar: isGitHubBuild,
+  productName: "Quick Ticket to Queue",
+  asar: isPublishBuild,
   generateUpdatesFilesForAllChannels: true,
   compression: "maximum",
   electronLanguages: ["en-US", "zh-CN"],
@@ -93,7 +92,7 @@ const config: Configuration = {
   npmRebuild: true,
   win: {
     target: isPublishBuild ? ["nsis"] : ["dir"],
-    executableName: "quickticket2queue",
+    executableName: "t2q",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
     signAndEditExecutable: shouldSignAndEditExecutable,
     icon: "assets/icons/icon-512.png",

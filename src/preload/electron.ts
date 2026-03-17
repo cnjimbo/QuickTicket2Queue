@@ -13,6 +13,8 @@ export default {
     ipcRenderer.invoke("set-update-preferences", preferences) as Promise<{
       includeBeta: boolean;
     }>,
+  getAppVersion: () =>
+    ipcRenderer.invoke("get-app-version") as Promise<string>,
   checkForAppUpdates: () =>
     ipcRenderer.invoke("check-for-app-updates") as Promise<{
       status: "disabled" | "up-to-date" | "update-available" | "downloaded" | "portable" | "error";

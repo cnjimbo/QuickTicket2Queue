@@ -15,6 +15,7 @@ const devUrlInput = ref('')
 const skipBeforeUnloadPrompt = ref(false)
 const isCheckingForUpdates = ref(false)
 const isDownloadingUpdate = ref(false)
+const currentVersion = ref('')
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
 let stopAppCloseSync: (() => void) | undefined
@@ -272,6 +273,12 @@ onMounted(() => {
     syncDevUrlInput()
   })
 
+  void window.electron.getAppVersion().then((version) => {
+    currentVersion.value = version
+  }).catch(() => {
+    currentVersion.value = ''
+  })
+
   stopTopToolbarSync = window.electron.onTopToolbarVisibilityChanged((visible) => {
     showTopToolbar.value = visible
     if (visible) {
@@ -322,19 +329,21 @@ const navLinks = computed(() => {
     <aside class="nav-panel">
       <div class="nav-brand">
         <p class="eyebrow">Quick Ticket to Queue</p>
-        <h1>工单控制台</h1>
+        <h1>控制台</h1>
         <p class="nav-subtitle">常用队列、凭据配置与工单提交入口</p>
-        <button type="button" class="update-action" :disabled="isCheckingForUpdates || isDownloadingUpdate"
-          @click="handleCheckForUpdates">
-          {{ isDownloadingUpdate ? '下载更新中...' : isCheckingForUpdates ? '检查更新中...' : '检查更新' }}
-        </button>
       </div>
       <nav class="nav-links">
-        <RouterLink v-for="link in navLinks" :key="link.to" :to="link.to" class="nav-link"
-          :class="{ 'is-active': route.path.startsWith(link.to) }">
-          <span class="nav-link__label">{{ link.meta.label }}</span>
-          <span class="nav-link__desc">{{ link.meta.description }}</span>
-        </RouterLink>
+        <template v-for="link in navLinks" :key="link.to">
+          <RouterLink :to="link.to" class="nav-link" :class="{ 'is-active': route.path.startsWith(link.to) }">
+            <span class="nav-link__label">{{ link.meta.label }}</span>
+            <span class="nav-link__desc">{{ link.meta.description }}</span>
+          </RouterLink>
+          <button v-if="link.to.includes('/help')" type="button" class="update-action"
+            :disabled="isCheckingForUpdates || isDownloadingUpdate" @click="handleCheckForUpdates">
+            {{ isDownloadingUpdate ? '下载更新中...' : isCheckingForUpdates ? '检查更新中...' : '检查更新' }}
+          </button>
+          <div v-if="link.to.includes('/help')" class="update-version">当前版本 {{ currentVersion || '-' }}</div>
+        </template>
       </nav>
     </aside>
 
@@ -468,6 +477,14 @@ const navLinks = computed(() => {
 .update-action:disabled {
   cursor: wait;
   opacity: 0.7;
+}
+
+.update-version {
+  margin-top: -2px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #94a3b8;
 }
 
 .eyebrow {
