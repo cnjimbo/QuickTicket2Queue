@@ -53,6 +53,7 @@ jobs:
           TAG_NAME="v$RELEASE_VERSION"
           PUBLISH_TAG_NAME="$TAG_NAME"
           PUBLISH_TAG_PREFIX="v"
+          SHORT_SHA="${GITHUB_SHA::7}"
           STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
           PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$'
 
@@ -89,7 +90,7 @@ jobs:
               SHOULD_TAG="true"
               OVERWRITE="true"
               PUBLISH_TAG_PREFIX="v"
-              PUBLISH_TAG_NAME="v${RELEASE_VERSION}-tmp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+              PUBLISH_TAG_NAME="v${RELEASE_VERSION}-tmp-$SHORT_SHA"
             else
               SHOULD_TAG="true"
               OVERWRITE="false"
@@ -185,17 +186,11 @@ jobs:
       - name: Install
         run: pnpm i
 
-      - name: Compute artifact suffix
-        id: artifact_suffix
-        shell: bash
-        run: |
-          echo "value=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
-
       - name: Build and publish
         env:
           ELECTRON_BUILDER_PUBLISH: always
           ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.auto_tag_release.outputs.publish_tag_prefix }}
-          ELECTRON_BUILDER_ARTIFACT_SUFFIX: ${{ steps.artifact_suffix.outputs.value }}
+          ELECTRON_BUILDER_ARTIFACT_COMMIT: ${{ github.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
           GITHUB_REF: refs/tags/${{ needs.auto_tag_release.outputs.publish_tag_name }}

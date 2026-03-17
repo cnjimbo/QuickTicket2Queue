@@ -6,7 +6,7 @@ const APP_VERSION = readAppVersion(__dirname);
 const IS_PRERELEASE_VERSION = /-/.test(APP_VERSION);
 const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
 const publishTagNamePrefix = process.env.ELECTRON_BUILDER_TAG_NAME_PREFIX?.trim();
-const artifactNameSuffix = process.env.ELECTRON_BUILDER_ARTIFACT_SUFFIX?.trim() ?? "";
+const artifactCommit = process.env.ELECTRON_BUILDER_ARTIFACT_COMMIT?.trim().slice(0, 7) ?? "";
 
 assertSupportedAppVersion(APP_VERSION, "electron-builder");
 
@@ -70,7 +70,7 @@ if (isWindowsDomain) {
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
   productName: "Quick Ticket to Queue",
-  artifactName: `\${productName}-\${version}-\${arch}-\${os}-${artifactNameSuffix}.\${ext}`,
+  artifactName: `\${productName}-\${version}-\${arch}-\${os}${artifactCommit ? `-${artifactCommit}` : ""}.\${ext}`,
   asar: isPublishBuild,
   generateUpdatesFilesForAllChannels: true,
   compression: "maximum",
