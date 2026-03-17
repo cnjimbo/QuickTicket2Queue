@@ -74,10 +74,11 @@ jobs:
           if [ -z "$SKIP_REASON" ]; then
             git fetch --tags
             if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-              SHOULD_TAG="false"
-              SKIP_REASON="Tag $TAG_NAME 已存在，跳过本次发布。"
+              SHOULD_TAG="true"
+              OVERWRITE="true"
             else
               SHOULD_TAG="true"
+              OVERWRITE="false"
             fi
           fi
 
@@ -89,17 +90,25 @@ jobs:
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+          echo "overwrite=${OVERWRITE:-false}" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         id: create_tag
         if: github.event_name == 'push' && steps.version_check.outputs.should_tag == 'true'
         env:
           TAG_NAME: ${{ steps.version_check.outputs.tag_name }}
+          OVERWRITE: ${{ steps.version_check.outputs.overwrite }}
         run: |
           git fetch --tags
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$OVERWRITE" = "true" ]; then
+            git tag -d "$TAG_NAME" || true
+            git push origin ":refs/tags/$TAG_NAME" || true
+          fi
+
           git tag "$TAG_NAME" "$GITHUB_SHA"
           git push origin "$TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
@@ -113,6 +122,7 @@ jobs:
           name: ${{ steps.version_check.outputs.tag_name }}
           generate_release_notes: true
           prerelease: ${{ steps.version_check.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.version_check.outputs.prerelease != 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

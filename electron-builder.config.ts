@@ -54,6 +54,7 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
 
 const shouldDisableWindowsSigning = isWindowsDomainEnvironment();
 const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
+const isGitHubBuild = Boolean(process.env.GITHUB_ACTIONS);
 const shouldSignAndEditExecutable =
   process.platform === "win32" &&
   !shouldDisableWindowsSigning &&
@@ -74,7 +75,7 @@ if (!shouldSignAndEditExecutable) {
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
   productName: "quickticket2queue",
-  asar: false,
+  asar: isGitHubBuild,
   generateUpdatesFilesForAllChannels: true,
   compression: "maximum",
   electronLanguages: ["en-US", "zh-CN"],
