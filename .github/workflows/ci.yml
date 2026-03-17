@@ -161,7 +161,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-      fail-fast: false
+      fail-fast: true
     permissions: write-all
 
     steps:
