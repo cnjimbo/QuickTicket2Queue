@@ -88,8 +88,8 @@ jobs:
             if [ "$TAG_EXISTS" = "true" ] || [ "$RELEASE_EXISTS" = "true" ]; then
               SHOULD_TAG="true"
               OVERWRITE="true"
-              PUBLISH_TAG_PREFIX="tmp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-v"
-              PUBLISH_TAG_NAME="${PUBLISH_TAG_PREFIX}${RELEASE_VERSION}"
+              PUBLISH_TAG_PREFIX="v"
+              PUBLISH_TAG_NAME="v${RELEASE_VERSION}-tmp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
             else
               SHOULD_TAG="true"
               OVERWRITE="false"
@@ -189,9 +189,7 @@ jobs:
         id: artifact_suffix
         shell: bash
         run: |
-          BRANCH="${{ github.ref_name }}"
-          SANITIZED="${BRANCH//\//-}"
-          echo "value=${SANITIZED}-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+          echo "value=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish
         env:
@@ -238,19 +236,24 @@ jobs:
           fi
 
           if [ "$PRERELEASE" = "true" ]; then
-            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
-              -f tag_name="$TAG_NAME" \
-              -f name="$TAG_NAME" \
-              -f draft=false \
-              -f prerelease=true \
-              -f make_latest=false
+            PRERELEASE_BOOL=true
+            MAKE_LATEST_VALUE=false
           else
-            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
-              -f tag_name="$TAG_NAME" \
-              -f name="$TAG_NAME" \
-              -f draft=false \
-              -f prerelease=false \
-              -f make_latest=true
+            PRERELEASE_BOOL=false
+            MAKE_LATEST_VALUE=true
+          fi
+
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F tag_name="$TAG_NAME" \
+            -F name="$TAG_NAME" \
+            -F draft=false \
+            -F prerelease="$PRERELEASE_BOOL" \
+            -F make_latest="$MAKE_LATEST_VALUE"
+
+          IS_DRAFT=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')
+          if [ "$IS_DRAFT" != "false" ]; then
+            echo "Error: release $RELEASE_ID is still draft after publish"
+            exit 1
           fi
 
           if [ "$OVERWRITE" = "true" ] && [ "$PUBLISH_TAG_NAME" != "$TAG_NAME" ]; then
