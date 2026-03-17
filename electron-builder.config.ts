@@ -54,23 +54,15 @@ function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, nev
   };
 }
 
-const shouldDisableWindowsSigning = isWindowsDomainEnvironment();
-const shouldSignAndEditExecutable =
-  process.platform === "win32" &&
-  !shouldDisableWindowsSigning &&
-  process.env.ELECTRON_BUILDER_SIGN_AND_EDIT_EXECUTABLE === "true";
+const isWindowsDomain = isWindowsDomainEnvironment();
 
-if (shouldDisableWindowsSigning) {
+if (isWindowsDomain) {
   console.warn(
     " ⚠️  Detected Windows domain environment. Code signing will be disabled to avoid potential issues with domain policies.",
   );
 }
 
-if (!shouldSignAndEditExecutable) {
-  console.warn(
-    " ⚠️  Windows executable resource editing is disabled. Set ELECTRON_BUILDER_SIGN_AND_EDIT_EXECUTABLE=true to enable rcedit metadata updates.",
-  );
-}
+
 
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
@@ -88,7 +80,7 @@ const config: Configuration = {
     target: isPublishBuild ? ["nsis"] : ["dir"],
     executableName: "t2q",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
-    signAndEditExecutable: shouldSignAndEditExecutable,
+    signAndEditExecutable: !isWindowsDomain,
     icon: "assets/icons/icon-512.png",
   },
   nsis: {
