@@ -1,25 +1,13 @@
 import type { Configuration } from "electron-builder";
 import { assertSupportedAppVersion, readAppVersion } from "./scripts/app-version";
 
-const DEFAULT_GITHUB_REPOSITORY = "cnjimbo/QuickTicket2Queue";
 const APP_VERSION = readAppVersion(__dirname);
-const IS_PRERELEASE_VERSION = /-/.test(APP_VERSION);
-const isPublishBuild = process.env.ELECTRON_BUILDER_PUBLISH === "always";
-const publishTagNamePrefix = process.env.ELECTRON_BUILDER_TAG_NAME_PREFIX?.trim();
-const artifactCommit = process.env.ELECTRON_BUILDER_ARTIFACT_COMMIT?.trim().slice(0, 7) ?? "";
+const isReleaseBuild = process.env.ELECTRON_BUILDER_RELEASE_BUILD === "true";
+const artifactCommit =
+  process.env.ELECTRON_BUILDER_ARTIFACT_COMMIT?.trim().slice(0, 7) ||
+  new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
 assertSupportedAppVersion(APP_VERSION, "electron-builder");
-
-function getReleaseType(): "release" | "prerelease" | "draft" {
-  // In GitHub Actions matrix builds, always use draft so parallel OS jobs only
-  // upload assets without racing to finalize the release. The finalize_release
-  // job publishes the draft after all matrix jobs complete.
-  if (isPublishBuild) {
-    return "draft";
-  }
-
-  return IS_PRERELEASE_VERSION ? "prerelease" : "release";
-}
 
 function isWindowsDomainEnvironment(): boolean {
   return (
@@ -29,32 +17,6 @@ function isWindowsDomainEnvironment(): boolean {
       (process.env.USERDOMAIN && process.env.USERDOMAIN !== process.env.COMPUTERNAME),
     )
   );
-}
-
-function getGitHubRepository(): { owner: string; repo: string } {
-  const rawRepository = process.env.GITHUB_REPOSITORY || DEFAULT_GITHUB_REPOSITORY;
-  const [owner = "cnjimbo", repo = "QuickTicket2Queue"] = rawRepository.split("/");
-  return { owner, repo };
-}
-
-function getPublishConfig(): Pick<Configuration, "publish"> | Record<string, never> {
-  if (!isPublishBuild) {
-    return {};
-  }
-
-  const { owner, repo } = getGitHubRepository();
-
-  return {
-    publish: [
-      {
-        provider: "github",
-        owner,
-        repo,
-        ...(publishTagNamePrefix ? { tagNamePrefix: publishTagNamePrefix } : {}),
-        releaseType: getReleaseType(),
-      },
-    ],
-  };
 }
 
 const isWindowsDomain = isWindowsDomainEnvironment();
@@ -71,17 +33,16 @@ const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
   productName: "Quick Ticket to Queue",
   artifactName: `\${productName}-\${version}-\${arch}-\${os}${artifactCommit ? `-${artifactCommit}` : ""}.\${ext}`,
-  asar: isPublishBuild,
+  asar: isReleaseBuild,
   generateUpdatesFilesForAllChannels: true,
   compression: "maximum",
   electronLanguages: ["en-US", "zh-CN"],
   directories: {
     output: "build",
   },
-  ...getPublishConfig(),
   npmRebuild: true,
   win: {
-    target: isPublishBuild ? ["nsis"] : ["dir"],
+    target: isReleaseBuild ? ["nsis"] : ["dir"],
     executableName: "t2q",
     // artifactName: "quickticket2queue-${version}-${arch}.${ext}",
     signAndEditExecutable: !isWindowsDomain,
@@ -94,12 +55,12 @@ const config: Configuration = {
     deleteAppDataOnUninstall: false,
   },
   mac: {
-    target: ["zip"],
+    target: isReleaseBuild ? ["zip"] : ["dir"],
     icon: "assets/icons/icon-512.png",
     category: "public.app-category.productivity",
   },
   linux: {
-    target: ["AppImage"],
+    target: isReleaseBuild ? ["AppImage"] : ["dir"],
     icon: "assets/icons/icon-256.png",
     category: "Utility",
     maintainer: "cnjimbo",

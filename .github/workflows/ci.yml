@@ -45,6 +45,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "[信息] 正在根据 package.json 版本号和当前分支判断发布策略"
+
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           RELEASE_VERSION="$CURRENT_VERSION"
@@ -97,6 +99,8 @@ jobs:
             fi
           fi
 
+          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION release_type=${RELEASE_TYPE:-unknown} prerelease=${PRERELEASE:-unknown} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
+
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
@@ -115,6 +119,8 @@ jobs:
         env:
           PUBLISH_TAG_NAME: ${{ steps.version_check.outputs.publish_tag_name }}
         run: |
+          echo "[信息] 正在为发布创建 git tag：$PUBLISH_TAG_NAME"
+
           git fetch --tags
 
           git config user.name "github-actions[bot]"
@@ -141,7 +147,9 @@ jobs:
       - name: Mark release creation result
         id: release_status
         if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
-        run: echo "released=true" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "[信息] 已为 tag ${{ steps.version_check.outputs.publish_tag_name }} 创建 GitHub 草稿 release"
+          echo "released=true" >> "$GITHUB_OUTPUT"
 
       - name: Report release decision
         if: always()
@@ -186,15 +194,46 @@ jobs:
       - name: Install
         run: pnpm i
 
+      - name: Clean build output
+        shell: pwsh
+        run: |
+          if (Test-Path build) {
+            Remove-Item build -Recurse -Force
+          }
+
       - name: Build and publish
         env:
-          ELECTRON_BUILDER_PUBLISH: always
+          ELECTRON_BUILDER_RELEASE_BUILD: "true"
           ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.auto_tag_release.outputs.publish_tag_prefix }}
           ELECTRON_BUILDER_ARTIFACT_COMMIT: ${{ github.sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
           GITHUB_REF: refs/tags/${{ needs.auto_tag_release.outputs.publish_tag_name }}
-        run: pnpm run build
+        run: |
+          echo "[信息] 正在 $RUNNER_OS 上为 tag ${{ needs.auto_tag_release.outputs.publish_tag_name }} 构建发布产物"
+          pnpm run build
+
+      - name: Upload build artifacts to draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_TAG_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
+        run: |
+          Write-Host "[信息] 正在收集 release $env:PUBLISH_TAG_NAME 的构建产物"
+
+          $files = Get-ChildItem build -Recurse -File |
+            Where-Object {
+              $_.Name -notin @('builder-debug.yml', 'builder-effective-config.yaml') -and
+              $_.FullName -notmatch '[\\/]win-unpacked([\\/]|$)'
+            } |
+            Select-Object -ExpandProperty FullName
+
+          if ($files.Count -eq 0) {
+            throw 'No build artifacts found to upload.'
+          }
+
+          Write-Host "[信息] 正在向草稿 release $env:PUBLISH_TAG_NAME 上传 $($files.Count) 个产物"
+
+          gh release upload $env:PUBLISH_TAG_NAME @files --clobber
 
   finalize_release:
     needs: [auto_tag_release, release]
@@ -202,8 +241,11 @@ jobs:
     if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
     permissions:
       contents: write
+    outputs:
+      tag_transition_started: ${{ steps.publish_release.outputs.tag_transition_started }}
     steps:
       - name: Publish draft release
+        id: publish_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
@@ -212,22 +254,12 @@ jobs:
           OVERWRITE: ${{ needs.auto_tag_release.outputs.overwrite }}
           TARGET_SHA: ${{ github.sha }}
         run: |
+          echo "[信息] 正在完成 release 发布：publish_tag=$PUBLISH_TAG_NAME final_tag=$TAG_NAME prerelease=$PRERELEASE overwrite=$OVERWRITE"
+
           RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$PUBLISH_TAG_NAME\") | .id" | head -1)
           if [ -z "$RELEASE_ID" ]; then
             echo "Error: could not find release for tag $PUBLISH_TAG_NAME"
             exit 1
-          fi
-
-          if [ "$OVERWRITE" = "true" ]; then
-            OLD_RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$TAG_NAME\") | .id" | head -1 || true)
-            if [ -n "$OLD_RELEASE_ID" ]; then
-              gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$OLD_RELEASE_ID"
-            fi
-
-            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG_NAME" 2>/dev/null || true
-            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
-              -f ref="refs/tags/$TAG_NAME" \
-              -f sha="$TARGET_SHA"
           fi
 
           if [ "$PRERELEASE" = "true" ]; then
@@ -236,6 +268,21 @@ jobs:
           else
             PRERELEASE_BOOL=false
             MAKE_LATEST_VALUE=true
+          fi
+
+          if [ "$OVERWRITE" = "true" ]; then
+            OLD_RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$TAG_NAME\") | .id" | head -1 || true)
+            echo "tag_transition_started=true" >> "$GITHUB_OUTPUT"
+            echo "[信息] 已进入覆盖模式，准备替换已有正式 tag：$TAG_NAME"
+
+            if [ -n "$OLD_RELEASE_ID" ]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$OLD_RELEASE_ID"
+            fi
+
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG_NAME" 2>/dev/null || true
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$TAG_NAME" \
+              -f sha="$TARGET_SHA"
           fi
 
           gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
@@ -260,6 +307,8 @@ jobs:
             fi
           fi
 
+          echo "[信息] Release 发布完成：$TAG_NAME"
+
           if [ "$OVERWRITE" = "true" ] && [ "$PUBLISH_TAG_NAME" != "$TAG_NAME" ]; then
             gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$PUBLISH_TAG_NAME" 2>/dev/null || true
           fi
@@ -274,9 +323,12 @@ jobs:
       - name: Cleanup publish tag and release residue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
           PUBLISH_TAG_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
+          OVERWRITE: ${{ needs.auto_tag_release.outputs.overwrite }}
+          TAG_TRANSITION_STARTED: ${{ needs.finalize_release.outputs.tag_transition_started }}
         run: |
-          echo "Cleanup triggered for publish tag: $PUBLISH_TAG_NAME"
+          echo "[信息] 已触发清理：publish_tag=$PUBLISH_TAG_NAME final_tag=$TAG_NAME overwrite=$OVERWRITE transition_started=$TAG_TRANSITION_STARTED"
 
           RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$PUBLISH_TAG_NAME\") | .id" | head -1 || true)
           if [ -n "$RELEASE_ID" ]; then
@@ -288,3 +340,16 @@ jobs:
 
           gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$PUBLISH_TAG_NAME" 2>/dev/null || true
           echo "Deleted tag $PUBLISH_TAG_NAME (if existed)"
+
+          if [ "$OVERWRITE" = "true" ] && [ "$TAG_TRANSITION_STARTED" = "true" ] && [ "$TAG_NAME" != "$PUBLISH_TAG_NAME" ]; then
+            TAG_RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$TAG_NAME\") | .id" | head -1 || true)
+            if [ -n "$TAG_RELEASE_ID" ]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$TAG_RELEASE_ID" || true
+              echo "Deleted release for tag $TAG_NAME"
+            else
+              echo "No release found for tag $TAG_NAME"
+            fi
+
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG_NAME" 2>/dev/null || true
+            echo "Deleted tag $TAG_NAME (if existed)"
+          fi
