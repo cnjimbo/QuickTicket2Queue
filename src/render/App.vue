@@ -15,6 +15,7 @@ const devUrlInput = ref('')
 const skipBeforeUnloadPrompt = ref(false)
 const isCheckingForUpdates = ref(false)
 const isDownloadingUpdate = ref(false)
+const downloadProgressPercent = ref(0)
 const isLoadingUpdatePreferences = ref(false)
 const isSavingUpdatePreferences = ref(false)
 const includeBetaUpdates = ref(false)
@@ -22,6 +23,7 @@ const currentVersion = ref('')
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
 let stopAppCloseSync: (() => void) | undefined
+let stopDownloadProgressSync: (() => void) | undefined
 const { execute: executeRespondToAppCloseRequest } = useAsyncState(
   (shouldClose: boolean) => window.electron.respondToAppCloseRequest(shouldClose),
   false,
@@ -137,6 +139,7 @@ async function downloadAvailableUpdate() {
   if (isDownloadingUpdate.value) return
 
   isDownloadingUpdate.value = true
+  downloadProgressPercent.value = 0
   try {
     const result = await window.electron.downloadAppUpdate()
 
@@ -324,6 +327,10 @@ onMounted(() => {
       syncDevUrlInput()
     }
   })
+  stopDownloadProgressSync = window.electron.onAppUpdateDownloadProgress((progress) => {
+    const next = Math.max(0, Math.min(100, Number(progress.percent) || 0))
+    downloadProgressPercent.value = next
+  })
   stopAppCloseSync = window.electron.onAppCloseRequested(handleAppCloseRequested)
 })
 
@@ -334,6 +341,7 @@ useEventListener(window, 'beforeunload', handleBeforeUnload)
 onBeforeUnmount(() => {
   stopRouteSync?.()
   stopTopToolbarSync?.()
+  stopDownloadProgressSync?.()
   stopAppCloseSync?.()
   skipBeforeUnloadPrompt.value = false
 })
@@ -404,6 +412,11 @@ const navLinks = computed(() => {
       </div>
     </section>
   </div>
+
+  <div v-if="isDownloadingUpdate" class="update-progress-line" role="progressbar" aria-label="下载更新进度" :aria-valuemin="0"
+    :aria-valuemax="100" :aria-valuenow="Math.round(downloadProgressPercent)">
+    <div class="update-progress-line__bar" :style="{ width: `${downloadProgressPercent}%` }" />
+  </div>
 </div>
 </template>
 
@@ -428,6 +441,23 @@ const navLinks = computed(() => {
   width: 100%;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.update-progress-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(56, 189, 248, 0.22);
+  z-index: 20;
+}
+
+.update-progress-line__bar {
+  height: 100%;
+  background: linear-gradient(90deg, #22d3ee 0%, #38bdf8 50%, #60a5fa 100%);
+  transition: width 0.18s ease;
 }
 
 .dev-urlbar {

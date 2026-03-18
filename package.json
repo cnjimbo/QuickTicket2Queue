@@ -1,7 +1,7 @@
 {
   "name": "quickticket2queue",
   "productName": "Quick Ticket to Queue",
-  "version": "26.3.5",
+  "version": "26.3.6-beta.1",
   "packageManager": "pnpm@10.32.1",
   "description": "Desktop app for quickly submitting ServiceNow tickets to common queues",
   "author": "cnjimbo",

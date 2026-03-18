@@ -20,6 +20,7 @@ const INSTALL_DOWNLOADED_APP_UPDATE_CHANNEL = "install-downloaded-app-update";
 const GET_APP_VERSION_CHANNEL = "get-app-version";
 const GET_UPDATE_PREFERENCES_CHANNEL = "get-update-preferences";
 const SET_UPDATE_PREFERENCES_CHANNEL = "set-update-preferences";
+const APP_UPDATE_DOWNLOAD_PROGRESS_CHANNEL = "app-update-download-progress";
 let showTopToolbar = false;
 
 type UpdatePreferences = {
@@ -34,6 +35,13 @@ type ManualUpdateResult = {
   preferences?: UpdatePreferences;
 };
 
+type DownloadProgressPayload = {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+};
+
 let availableUpdateInfo: UpdateInfo | null = null;
 let downloadedUpdateInfo: UpdateInfo | null = null;
 const updatePreferencesStore = new Store<UpdatePreferences>({
@@ -46,6 +54,12 @@ const updatePreferencesStore = new Store<UpdatePreferences>({
 function broadcastTopToolbarVisibility(visible: boolean): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(TOP_TOOLBAR_VISIBILITY_CHANNEL, visible);
+  }
+}
+
+function broadcastAppUpdateDownloadProgress(progress: DownloadProgressPayload): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(APP_UPDATE_DOWNLOAD_PROGRESS_CHANNEL, progress);
   }
 }
 
@@ -180,6 +194,13 @@ async function handleDownloadAppUpdate(): Promise<ManualUpdateResult> {
       };
     }
 
+    broadcastAppUpdateDownloadProgress({
+      percent: 0,
+      transferred: 0,
+      total: 0,
+      bytesPerSecond: 0,
+    });
+
     await autoUpdater.downloadUpdate();
     downloadedUpdateInfo = availableUpdateInfo;
 
@@ -297,7 +318,22 @@ function setupAutoUpdater() {
   autoUpdater.on("update-downloaded", (info) => {
     downloadedUpdateInfo = info;
     availableUpdateInfo = info;
+    broadcastAppUpdateDownloadProgress({
+      percent: 100,
+      transferred: 0,
+      total: 0,
+      bytesPerSecond: 0,
+    });
     console.log("Update downloaded:", info.version);
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    broadcastAppUpdateDownloadProgress({
+      percent: Number.isFinite(progress.percent) ? progress.percent : 0,
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    });
   });
 
   // Always register IPC handlers, even in development mode
