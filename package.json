@@ -1,7 +1,7 @@
 {
   "name": "quickticket2queue",
   "productName": "Quick Ticket to Queue",
-  "version": "26.3.4",
+  "version": "26.3.5-beta.4",
   "packageManager": "pnpm@10.32.1",
   "description": "Desktop app for quickly submitting ServiceNow tickets to common queues",
   "author": "cnjimbo",
@@ -35,7 +35,6 @@
     "@nuxt/opencollective": "^0.4.1",
     "@vueuse/core": "14.2.1",
     "@vueuse/router": "14.2.1",
-    "ajv": "^8.18.0",
     "builder-util-runtime": "^9.5.1",
     "call-bind-apply-helpers": "^1.0.2",
     "consola": "^3.4.2",

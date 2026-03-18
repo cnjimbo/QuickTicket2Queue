@@ -133,7 +133,7 @@ jobs:
       - name: Create GitHub draft release
         id: create_release
         if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.1
         with:
           tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
           name: ${{ steps.version_check.outputs.publish_tag_name }}

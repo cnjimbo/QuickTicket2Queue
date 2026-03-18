@@ -32,7 +32,7 @@ if (isWindowsDomain) {
 const config: Configuration = {
   appId: "com.beingknowing.quickticket2queue",
   productName: "Quick Ticket to Queue",
-  artifactName: `\${productName}-\${version}-\${arch}-\${os}${artifactCommit ? `-${artifactCommit}` : ""}.\${ext}`,
+  artifactName: `Quick.Ticket2Queue-\${version}-\${arch}-\${os}${artifactCommit ? `-${artifactCommit}` : ""}.\${ext}`,
   asar: isReleaseBuild,
   generateUpdatesFilesForAllChannels: true,
   compression: "maximum",
