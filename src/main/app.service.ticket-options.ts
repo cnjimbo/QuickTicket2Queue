@@ -1,14 +1,18 @@
 import { Injectable } from "@nestjs/common";
 import Store from "electron-store";
-import Ajv2020 from "ajv/dist/2020";
-import type { ErrorObject } from "ajv";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import ticketOptionsDefaultConfig from "@/config/ticket-options.default.json";
 import { TicketQueueOption } from "@/types/orm_types";
 import { AppServiceHttp } from "./app.service.http";
 
-const TICKET_OPTIONS_CONFIG_PATH = path.resolve(process.cwd(), "config", "ticket-options.default.json");
-const DEFAULT_TICKET_OPTIONS_SCHEMA_PATH = path.resolve(process.cwd(), "config", "ticket-options.schema.json");
+
+type TicketOptionsConfig = {
+    $schema?: string;
+    items: TicketQueueOption[];
+};
+
+const typedTicketOptionsDefaultConfig = ticketOptionsDefaultConfig satisfies TicketOptionsConfig;
 const GITHUB_TICKET_OPTIONS_RAW_URL = process.env.TICKET_OPTIONS_REMOTE_URL
     || "https://raw.githubusercontent.com/cnjimbo/QuickTicket2Queue/main/config/ticket-options.default.json";
 const GITHUB_TICKET_OPTIONS_FALLBACK_URLS = [
@@ -16,7 +20,6 @@ const GITHUB_TICKET_OPTIONS_FALLBACK_URLS = [
     "https://cdn.jsdelivr.net/gh/cnjimbo/QuickTicket2Queue@main/config/ticket-options.default.json",
 ];
 const FETCH_TIMEOUT_MS = 15000;
-const ajv = new Ajv2020({ allErrors: true, strict: false });
 
 export type TicketOptionsSyncMode = "merge" | "overwrite";
 
@@ -46,58 +49,9 @@ function normalizeTicketOptions(input: unknown): TicketQueueOption[] {
     return options;
 }
 
-function formatSchemaErrors(errors?: ErrorObject[] | null): string {
-    if (!errors || errors.length === 0) {
-        return "unknown schema validation error";
-    }
+function loadDefaultOptionsFromImportedConfig(): TicketQueueOption[] {
+    const parsed: TicketOptionsConfig = typedTicketOptionsDefaultConfig;
 
-    return errors
-        .map((error) => {
-            const location = error.instancePath || "/";
-            return `${location} ${error.message ?? "is invalid"}`;
-        })
-        .join("; ");
-}
-
-async function loadSchemaByConfigPath(schemaPathValue?: string, http?: AppServiceHttp): Promise<unknown> {
-    if (schemaPathValue && /^https?:\/\//i.test(schemaPathValue)) {
-        if (!http) throw new Error("HTTP service not available");
-        const text = await http.httpGetText("加载远程 schema", schemaPathValue, 15000);
-        return JSON.parse(text) as unknown;
-    }
-
-    const schemaPath = schemaPathValue
-        ? path.resolve(path.dirname(TICKET_OPTIONS_CONFIG_PATH), schemaPathValue)
-        : DEFAULT_TICKET_OPTIONS_SCHEMA_PATH;
-
-    const rawSchema = await fs.readFile(schemaPath, "utf8");
-    return JSON.parse(rawSchema) as unknown;
-}
-
-async function validateConfigWithSchema(config: unknown, schemaPathValue?: string, http?: AppServiceHttp): Promise<Record<string, unknown>> {
-    const schema = await loadSchemaByConfigPath(schemaPathValue, http);
-    const schemaForCompile = typeof schema === "object" && schema
-        ? { ...(schema as Record<string, unknown>) }
-        : schema;
-
-    if (schemaForCompile && typeof schemaForCompile === "object") {
-        delete (schemaForCompile as Record<string, unknown>).$id;
-    }
-
-    const validate = ajv.compile<Record<string, unknown>>(schemaForCompile as object);
-    const valid = validate(config);
-    if (!valid) {
-        throw new Error(`ticket-options.default.json schema 校验失败: ${formatSchemaErrors(validate.errors)}`);
-    }
-
-    return config as Record<string, unknown>;
-}
-
-async function loadDefaultOptionsFromConfig(http?: AppServiceHttp): Promise<TicketQueueOption[]> {
-    const raw = await fs.readFile(TICKET_OPTIONS_CONFIG_PATH, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-
-    // Backward compatible: treat legacy array format as { items } before schema validation.
     const configCandidate = Array.isArray(parsed)
         ? ({ items: parsed } as Record<string, unknown>)
         : parsed;
@@ -106,16 +60,10 @@ async function loadDefaultOptionsFromConfig(http?: AppServiceHttp): Promise<Tick
         throw new Error("ticket-options.default.json 必须是对象，且包含 items 字段");
     }
 
-    const schemaPathValue = typeof (configCandidate as Record<string, unknown>).$schema === "string"
-        ? (configCandidate as Record<string, unknown>).$schema as string
-        : undefined;
-    const configRoot = await validateConfigWithSchema(configCandidate, schemaPathValue, http);
-
-    const items = configRoot.items;
-    return normalizeTicketOptions(items);
+    return normalizeTicketOptions((configCandidate as Record<string, unknown>).items);
 }
 
-async function loadOptionsFromRawJson(rawJson: string, http?: AppServiceHttp): Promise<TicketQueueOption[]> {
+function loadOptionsFromRawJson(rawJson: string): TicketQueueOption[] {
     const parsed = JSON.parse(rawJson) as unknown;
 
     const configCandidate = Array.isArray(parsed)
@@ -126,12 +74,7 @@ async function loadOptionsFromRawJson(rawJson: string, http?: AppServiceHttp): P
         throw new Error("远程配置必须是对象，且包含 items 字段");
     }
 
-    const schemaPathValue = typeof (configCandidate as Record<string, unknown>).$schema === "string"
-        ? (configCandidate as Record<string, unknown>).$schema as string
-        : undefined;
-    const configRoot = await validateConfigWithSchema(configCandidate, schemaPathValue, http);
-
-    return normalizeTicketOptions(configRoot.items);
+    return normalizeTicketOptions((configCandidate as Record<string, unknown>).items);
 }
 
 function mergeByQueue(current: TicketQueueOption[], incoming: TicketQueueOption[]): TicketQueueOption[] {
@@ -195,16 +138,16 @@ export class AppServiceTicketOptions {
 
     public async get(): Promise<TicketQueueOption[]> {
         try {
-            const defaults = await loadDefaultOptionsFromConfig(this.http);
+            const defaults = loadDefaultOptionsFromImportedConfig();
             const options =
                 this.store.get("ticketOptions", cloneOptions(defaults));
             return options;
         } catch (error) {
             console.error("Failed to read ticket options from store:", error);
             try {
-                return await loadDefaultOptionsFromConfig(this.http);
+                return loadDefaultOptionsFromImportedConfig();
             } catch (configError) {
-                console.error("Failed to load default options from config:", configError);
+                console.error("Failed to load default options from imported config:", configError);
                 return [];
             }
         }
@@ -241,7 +184,7 @@ export class AppServiceTicketOptions {
 
     public async reset(): Promise<TicketQueueOption[]> {
         try {
-            const options = await loadDefaultOptionsFromConfig(this.http);
+            const options = loadDefaultOptionsFromImportedConfig();
             this.store.set("ticketOptions", options);
             return options;
         } catch (error) {
@@ -252,7 +195,7 @@ export class AppServiceTicketOptions {
 
     public async syncFromGithub(mode: TicketOptionsSyncMode): Promise<TicketQueueOption[]> {
         const rawText = await fetchRemoteTicketOptionsRawJson(this.http);
-        const remoteOptions = await loadOptionsFromRawJson(rawText, this.http);
+        const remoteOptions = loadOptionsFromRawJson(rawText);
 
         const nextOptions = mode === "overwrite"
             ? remoteOptions
