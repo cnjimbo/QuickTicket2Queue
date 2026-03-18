@@ -140,6 +140,10 @@ function mergeByQueue(current: TicketQueueOption[], incoming: TicketQueueOption[
     return [...current, ...toAppend];
 }
 
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+    return typeof error === "object" && error !== null && "code" in error;
+}
+
 async function fetchRemoteTicketOptionsRawJson(http: AppServiceHttp): Promise<string> {
     return http.httpGetTextWithFallback("同步 GitHub 配置", GITHUB_TICKET_OPTIONS_FALLBACK_URLS, FETCH_TIMEOUT_MS);
 }
@@ -161,6 +165,31 @@ export class AppServiceTicketOptions {
             console.error("Failed to initialize ticket options store:", error);
             // Create a dummy store that won't fail on access
             this.store = new Store({ name: "ticketOptions_backup" });
+        }
+    }
+
+    private async ensureStoreFileExists(): Promise<void> {
+        const storePath = this.store.path;
+
+        try {
+            await fs.access(storePath);
+        } catch {
+            await fs.mkdir(path.dirname(storePath), { recursive: true });
+            await fs.writeFile(storePath, "{}", "utf8");
+        }
+    }
+
+    private async setTicketOptions(options: TicketQueueOption[]): Promise<void> {
+        try {
+            this.store.set("ticketOptions", options);
+        } catch (error) {
+            if (isErrnoException(error) && error.code === "ENOENT") {
+                await this.ensureStoreFileExists();
+                this.store.set("ticketOptions", options);
+                return;
+            }
+
+            throw error;
         }
     }
 
@@ -229,7 +258,7 @@ export class AppServiceTicketOptions {
             ? remoteOptions
             : mergeByQueue(await this.get(), remoteOptions);
 
-        this.store.set("ticketOptions", nextOptions);
+        await this.setTicketOptions(nextOptions);
         return nextOptions;
     }
 }
