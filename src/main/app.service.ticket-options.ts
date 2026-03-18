@@ -5,14 +5,6 @@ import path from "node:path";
 import ticketOptionsDefaultConfig from "@/config/ticket-options.default.json";
 import { TicketQueueOption } from "@/types/orm_types";
 import { AppServiceHttp } from "./app.service.http";
-
-
-type TicketOptionsConfig = {
-    $schema?: string;
-    items: TicketQueueOption[];
-};
-
-const typedTicketOptionsDefaultConfig = ticketOptionsDefaultConfig satisfies TicketOptionsConfig;
 const GITHUB_TICKET_OPTIONS_RAW_URL = process.env.TICKET_OPTIONS_REMOTE_URL
     || "https://raw.githubusercontent.com/cnjimbo/QuickTicket2Queue/main/config/ticket-options.default.json";
 const GITHUB_TICKET_OPTIONS_FALLBACK_URLS = [
@@ -27,16 +19,15 @@ function cloneOptions(options: TicketQueueOption[]): TicketQueueOption[] {
     return options.map((item) => ({ ...item }));
 }
 
-function normalizeTicketOptions(input: unknown): TicketQueueOption[] {
+function normalizeTicketOptions(input: TicketQueueOption[]): TicketQueueOption[] {
     if (!Array.isArray(input)) {
         throw new Error("ticket-options.default.json 的 items 必须是数组");
     }
 
     const options = input
         .map((item) => {
-            if (!item || typeof item !== "object") return null;
-            const des = String((item as Record<string, unknown>).des ?? "").trim();
-            const queue = String((item as Record<string, unknown>).queue ?? "").trim();
+            const des = String(item?.des ?? "").trim();
+            const queue = String(item?.queue ?? "").trim();
             if (!des || !queue) return null;
             return { des, queue } satisfies TicketQueueOption;
         })
@@ -49,32 +40,11 @@ function normalizeTicketOptions(input: unknown): TicketQueueOption[] {
     return options;
 }
 
-function loadDefaultOptionsFromImportedConfig(): TicketQueueOption[] {
-    const parsed: TicketOptionsConfig = typedTicketOptionsDefaultConfig;
-
-    const configCandidate = Array.isArray(parsed)
-        ? ({ items: parsed } as Record<string, unknown>)
-        : parsed;
-
-    if (!configCandidate || typeof configCandidate !== "object") {
-        throw new Error("ticket-options.default.json 必须是对象，且包含 items 字段");
-    }
-
-    return normalizeTicketOptions((configCandidate as Record<string, unknown>).items);
-}
+const DEFAULT_TICKET_OPTIONS = ticketOptionsDefaultConfig.items;
 
 function loadOptionsFromRawJson(rawJson: string): TicketQueueOption[] {
-    const parsed = JSON.parse(rawJson) as unknown;
-
-    const configCandidate = Array.isArray(parsed)
-        ? ({ items: parsed } as Record<string, unknown>)
-        : parsed;
-
-    if (!configCandidate || typeof configCandidate !== "object") {
-        throw new Error("远程配置必须是对象，且包含 items 字段");
-    }
-
-    return normalizeTicketOptions((configCandidate as Record<string, unknown>).items);
+    const parsed = JSON.parse(rawJson) as typeof ticketOptionsDefaultConfig;
+    return normalizeTicketOptions(parsed.items);
 }
 
 function mergeByQueue(current: TicketQueueOption[], incoming: TicketQueueOption[]): TicketQueueOption[] {
@@ -138,14 +108,13 @@ export class AppServiceTicketOptions {
 
     public async get(): Promise<TicketQueueOption[]> {
         try {
-            const defaults = loadDefaultOptionsFromImportedConfig();
             const options =
-                this.store.get("ticketOptions", cloneOptions(defaults));
+                this.store.get("ticketOptions", cloneOptions(DEFAULT_TICKET_OPTIONS));
             return options;
         } catch (error) {
             console.error("Failed to read ticket options from store:", error);
             try {
-                return loadDefaultOptionsFromImportedConfig();
+                return cloneOptions(DEFAULT_TICKET_OPTIONS);
             } catch (configError) {
                 console.error("Failed to load default options from imported config:", configError);
                 return [];
@@ -163,7 +132,7 @@ export class AppServiceTicketOptions {
             if (options.some((v) => v.queue === queue)) return;
 
             options.unshift({ des, queue });
-            this.store.set("ticketOptions", options);
+            await this.setTicketOptions(options);
         } catch (error) {
             console.error("Failed to add ticket option to store:", error);
         }
@@ -176,7 +145,7 @@ export class AppServiceTicketOptions {
 
             const options = await this.get();
             const next = options.filter((item) => item.queue !== queueValue);
-            this.store.set("ticketOptions", next);
+            await this.setTicketOptions(next);
         } catch (error) {
             console.error("Failed to delete ticket option from store:", error);
         }
@@ -184,8 +153,8 @@ export class AppServiceTicketOptions {
 
     public async reset(): Promise<TicketQueueOption[]> {
         try {
-            const options = loadDefaultOptionsFromImportedConfig();
-            this.store.set("ticketOptions", options);
+            const options = cloneOptions(DEFAULT_TICKET_OPTIONS);
+            await this.setTicketOptions(options);
             return options;
         } catch (error) {
             console.error("Failed to reset ticket options in store:", error);
