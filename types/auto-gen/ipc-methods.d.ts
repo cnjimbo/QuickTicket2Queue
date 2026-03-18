@@ -63,6 +63,10 @@ export interface IpcInvokeMap {
     params: [data: TicketType]
     return: Promise<TicketResponse>
   }
+  'ticket-via-web-session': {
+    params: [data: TicketType]
+    return: Promise<TicketResponse>
+  }
 }
 
 export type IpcChannel = keyof IpcInvokeMap

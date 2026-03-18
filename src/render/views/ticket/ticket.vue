@@ -54,7 +54,7 @@ definePage({
 })
 
 const ticketStore = useTicketStore()
-const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges, isSubmitting } = storeToRefs(ticketStore)
+const { ticket, validationMessages, isFormValid, result, hasUnsavedDraftChanges, isSubmitting, isSubmittingViaWebSession } = storeToRefs(ticketStore)
 const defaultCurrent: CredentialItem = {
     env: 'pfetst',
 }
@@ -90,6 +90,7 @@ const link = computed(() =>
         },
 )
 const enableSubmitBtn = computed(() => credentialReady.value && isFormValid.value && !isSubmitting.value)
+const enableWebLoginSubmitBtn = computed(() => isFormValid.value && !isSubmitting.value && !isSubmittingViaWebSession.value)
 
 onMounted(async () => {
     ticketStore.hydrateTicketDraft()
@@ -174,6 +175,16 @@ async function submitTicket() {
     ticketStore.refreshDraftBaseline()
 }
 
+async function submitTicketViaWebSession() {
+    const errorMessage = await ticketStore.submitTicketViaWebSession()
+    if (errorMessage) {
+        showSubmitError(errorMessage)
+        return
+    }
+
+    ticketStore.refreshDraftBaseline()
+}
+
 const goCredentialSetting = async () => {
     await router.push('/settings/credentials')
 }
@@ -220,12 +231,20 @@ const goCredentialSetting = async () => {
         </el-autocomplete>
         <p class="field-error" v-if="validationMessages.queue_val">{{ validationMessages.queue_val }}</p>
 
-        <el-button type="primary" :disabled="!enableSubmitBtn" @click="submitTicket">提交工单</el-button>
+        <div class="submit-actions">
+            <el-button type="primary" :disabled="!enableSubmitBtn" :loading="isSubmitting" @click="submitTicket">
+                提交工单
+            </el-button>
+            <el-button type="success" plain :disabled="!enableWebLoginSubmitBtn" :loading="isSubmittingViaWebSession"
+                @click="submitTicketViaWebSession">
+                {{ isSubmittingViaWebSession ? '网页登录并提交中...' : '网页登录并提交' }}
+            </el-button>
+        </div>
 
         <div style="margin-bottom: 8px; font-weight: 600;"></div>
 
         <el-link :href="link.href" target="_blank" @click.prevent="electron.openLink(link.href)">{{ link.txt
-        }}</el-link>
+            }}</el-link>
     </el-card>
 </div>
 </template>
@@ -281,6 +300,12 @@ a:hover {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.submit-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .global-toast {

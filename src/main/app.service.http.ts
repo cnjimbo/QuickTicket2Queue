@@ -14,6 +14,10 @@ export interface HttpResponse<T> {
     statusText: string;
 }
 
+interface RequestBehaviorOptions {
+    suppressErrorLog?: boolean;
+}
+
 interface HttpTextResponse {
     success: boolean;
     text: string;
@@ -170,12 +174,15 @@ export class AppServiceHttp {
         url: string,
         options: RequestInit,
         host?: string,
+        behaviorOptions?: RequestBehaviorOptions,
     ): Promise<T> {
         const response = await this.fetchWithTimeout<T>(url, options);
 
         if (!response.success) {
             const errorMessage = this.buildErrorMessage(context, response, host);
-            console.error(`${context} request failed:`, errorMessage);
+            if (!behaviorOptions?.suppressErrorLog) {
+                console.error(`${context} request failed:`, errorMessage);
+            }
             throw new Error(errorMessage);
         }
 
@@ -221,6 +228,28 @@ export class AppServiceHttp {
             body: JSON.stringify(payload),
         };
         return this.request<T>(context, url, options, host);
+    }
+
+    public async httpPostWithHeaders<T>(
+        context: string,
+        url: string,
+        payload: unknown,
+        headers: Record<string, string>,
+        host?: string,
+        behaviorOptions?: RequestBehaviorOptions,
+    ): Promise<T> {
+        const options: RequestInit = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json,text/plain,*/*",
+                Connection: "keep-alive",
+                ...headers,
+            },
+            body: JSON.stringify(payload),
+        };
+
+        return this.request<T>(context, url, options, host, behaviorOptions);
     }
 
     /**

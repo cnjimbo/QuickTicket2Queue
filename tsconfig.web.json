@@ -1,11 +1,12 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
   "include": [
-    // "src/preload/**/*", //不能包含preload中的代码
-    // "**/*.ts",
     "./**/*.d.ts",
     "./src/render/**/*",
+    "./src/preload/electron.ts",
+    "./src/preload/auto-gen/**/*",
     "./src/render/utils/draft-leave-confirm.ts",
+    "./scripts/app-version.ts",
     "vite.config.mts",
   ],
   "compilerOptions": {

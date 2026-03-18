@@ -37,4 +37,6 @@ export const ipcInvoke = {
     ipcRenderer.invoke('sync-ticket-options-from-github', ...args) as unknown as PreloadInvokeReturn<'sync-ticket-options-from-github', true>,
   ticket: (...args: IpcInvokeArgs<'ticket'>): PreloadInvokeReturn<'ticket', true> =>
     ipcRenderer.invoke('ticket', ...args) as unknown as PreloadInvokeReturn<'ticket', true>,
+  ticketViaWebSession: (...args: IpcInvokeArgs<'ticket-via-web-session'>): PreloadInvokeReturn<'ticket-via-web-session', true> =>
+    ipcRenderer.invoke('ticket-via-web-session', ...args) as unknown as PreloadInvokeReturn<'ticket-via-web-session', true>,
 } as const
