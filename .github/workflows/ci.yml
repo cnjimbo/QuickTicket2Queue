@@ -11,21 +11,21 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  detect_package_version:
+  read_package_version:
     runs-on: ubuntu-latest
     outputs:
-      current_version: ${{ steps.read_version.outputs.current_version }}
+      current_version: ${{ steps.read_package_version.outputs.current_version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Read package version
-        id: read_version
+        id: read_package_version
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
 
-  auto_tag_release:
-    needs: detect_package_version
+  prepare_release_metadata:
+    needs: read_package_version
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency:
@@ -48,19 +48,19 @@ jobs:
       prerelease: ${{ steps.version_check.outputs.prerelease }}
       release_type: ${{ steps.version_check.outputs.release_type }}
       overwrite: ${{ steps.version_check.outputs.overwrite }}
-      created: ${{ steps.create_tag.outputs.created }}
-      released: ${{ steps.release_status.outputs.released }}
+      created: ${{ steps.ensure_publish_tag.outputs.created }}
+      released: ${{ steps.mark_draft_release_created.outputs.released }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
-      - name: Detect version increase
+      - name: Validate branch/version and prepare release metadata
         id: version_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURRENT_VERSION: ${{ needs.detect_package_version.outputs.current_version }}
+          CURRENT_VERSION: ${{ needs.read_package_version.outputs.current_version }}
         run: |
           echo "[信息] 正在根据 package.json 版本号和当前分支判断发布策略"
 
@@ -140,8 +140,8 @@ jobs:
           echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
           echo "overwrite=${OVERWRITE:-false}" >> "$GITHUB_OUTPUT"
 
-      - name: Create and push tag
-        id: create_tag
+      - name: Ensure publish tag points to current commit
+        id: ensure_publish_tag
         if: github.event_name == 'push' && steps.version_check.outputs.should_tag == 'true'
         env:
           PUBLISH_TAG_NAME: ${{ steps.version_check.outputs.publish_tag_name }}
@@ -172,7 +172,7 @@ jobs:
           git push origin "refs/tags/$PUBLISH_TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
 
-      - name: Fail when version does not match branch policy
+      - name: Fail when branch version validation fails
         if: steps.version_check.outputs.policy_error != ''
         run: |
           echo "::error::版本校验失败：${{ steps.version_check.outputs.policy_error }}"
@@ -182,9 +182,9 @@ jobs:
           echo "reason=${{ steps.version_check.outputs.policy_error }}" >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      - name: Create GitHub draft release
-        id: create_release
-        if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
+      - name: Create or update GitHub draft release
+        id: create_draft_release
+        if: github.event_name == 'push' && steps.ensure_publish_tag.outputs.created == 'true'
         uses: softprops/action-gh-release@v2.6.1
         with:
           tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
@@ -196,14 +196,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mark release creation result
-        id: release_status
-        if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
+      - name: Mark draft release creation result
+        id: mark_draft_release_created
+        if: github.event_name == 'push' && steps.ensure_publish_tag.outputs.created == 'true'
         run: |
           echo "[信息] 已为 tag ${{ steps.version_check.outputs.publish_tag_name }} 创建 GitHub 草稿 release"
           echo "released=true" >> "$GITHUB_OUTPUT"
 
-      - name: Report release decision
+      - name: Report release planning summary
         if: always()
         run: |
           echo "branch_name=${{ steps.version_check.outputs.branch_name }}" >> "$GITHUB_STEP_SUMMARY"
@@ -225,10 +225,10 @@ jobs:
             echo "skip_reason=${{ steps.version_check.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  release:
-    needs: [detect_package_version, auto_tag_release]
+  build_release_artifacts:
+    needs: [read_package_version, prepare_release_metadata]
     runs-on: ${{ matrix.os }}
-    if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
+    if: github.event_name == 'push' && needs.prepare_release_metadata.outputs.released == 'true'
     timeout-minutes: 90
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-release-${{ matrix.os }}
@@ -261,15 +261,15 @@ jobs:
             Remove-Item build -Recurse -Force
           }
 
-      - name: Build and publish
+      - name: Build release artifacts
         env:
           ELECTRON_BUILDER_RELEASE_BUILD: "true"
-          ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.auto_tag_release.outputs.publish_tag_prefix }}
+          ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.prepare_release_metadata.outputs.publish_tag_prefix }}
           ELECTRON_BUILDER_ARTIFACT_COMMIT: ${{ github.sha }}
-          GITHUB_REF_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
-          GITHUB_REF: refs/tags/${{ needs.auto_tag_release.outputs.publish_tag_name }}
+          GITHUB_REF_NAME: ${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
+          GITHUB_REF: refs/tags/${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
         run: |
-          echo "[信息] 正在 $RUNNER_OS 上为 tag ${{ needs.auto_tag_release.outputs.publish_tag_name }} 构建发布产物"
+          echo "[信息] 正在 $RUNNER_OS 上为 tag ${{ needs.prepare_release_metadata.outputs.publish_tag_name }} 构建发布产物"
           pnpm run build
 
       - name: Install and smoke test Windows package
@@ -337,7 +337,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH_TAG_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
+          PUBLISH_TAG_NAME: ${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
         run: |
           Write-Host "[信息] 正在收集 release $env:PUBLISH_TAG_NAME 的构建产物"
 
@@ -353,26 +353,27 @@ jobs:
 
           gh release upload $env:PUBLISH_TAG_NAME @files --clobber
 
-  finalize_release:
-    needs: [detect_package_version, auto_tag_release, release]
+  publish_release:
+    needs:
+      [read_package_version, prepare_release_metadata, build_release_artifacts]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
+    if: github.event_name == 'push' && needs.prepare_release_metadata.outputs.released == 'true'
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-finalize_release
       cancel-in-progress: true
     permissions:
       contents: write
     outputs:
-      tag_transition_started: ${{ steps.publish_release.outputs.tag_transition_started }}
+      tag_transition_started: ${{ steps.publish_release_step.outputs.tag_transition_started }}
     steps:
-      - name: Publish draft release
-        id: publish_release
+      - name: Publish draft release to final release
+        id: publish_release_step
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
-          PUBLISH_TAG_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
-          PRERELEASE: ${{ needs.auto_tag_release.outputs.prerelease }}
-          OVERWRITE: ${{ needs.auto_tag_release.outputs.overwrite }}
+          TAG_NAME: ${{ needs.prepare_release_metadata.outputs.tag_name }}
+          PUBLISH_TAG_NAME: ${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
+          PRERELEASE: ${{ needs.prepare_release_metadata.outputs.prerelease }}
+          OVERWRITE: ${{ needs.prepare_release_metadata.outputs.overwrite }}
           TARGET_SHA: ${{ github.sha }}
         run: |
           echo "[信息] 正在完成 release 发布：publish_tag=$PUBLISH_TAG_NAME final_tag=$TAG_NAME prerelease=$PRERELEASE overwrite=$OVERWRITE"
@@ -448,10 +449,16 @@ jobs:
             gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$PUBLISH_TAG_NAME" 2>/dev/null || true
           fi
 
-  cleanup_on_failure_or_cancel:
-    needs: [detect_package_version, auto_tag_release, release, finalize_release]
+  cleanup_failed_release:
+    needs:
+      [
+        read_package_version,
+        prepare_release_metadata,
+        build_release_artifacts,
+        publish_release,
+      ]
     runs-on: ubuntu-latest
-    if: always() && github.event_name == 'push' && needs.auto_tag_release.outputs.publish_tag_name != '' && (needs.auto_tag_release.result != 'success' || needs.release.result != 'success' || needs.finalize_release.result != 'success')
+    if: always() && github.event_name == 'push' && needs.prepare_release_metadata.outputs.publish_tag_name != '' && (needs.prepare_release_metadata.result != 'success' || needs.build_release_artifacts.result != 'success' || needs.publish_release.result != 'success')
     concurrency:
       group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-cleanup_on_failure_or_cancel
       cancel-in-progress: true
@@ -461,10 +468,10 @@ jobs:
       - name: Cleanup publish tag and release residue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.auto_tag_release.outputs.tag_name }}
-          PUBLISH_TAG_NAME: ${{ needs.auto_tag_release.outputs.publish_tag_name }}
-          OVERWRITE: ${{ needs.auto_tag_release.outputs.overwrite }}
-          TAG_TRANSITION_STARTED: ${{ needs.finalize_release.outputs.tag_transition_started }}
+          TAG_NAME: ${{ needs.prepare_release_metadata.outputs.tag_name }}
+          PUBLISH_TAG_NAME: ${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
+          OVERWRITE: ${{ needs.prepare_release_metadata.outputs.overwrite }}
+          TAG_TRANSITION_STARTED: ${{ needs.publish_release.outputs.tag_transition_started }}
         run: |
           echo "[信息] 已触发清理：publish_tag=$PUBLISH_TAG_NAME final_tag=$TAG_NAME overwrite=$OVERWRITE transition_started=$TAG_TRANSITION_STARTED"
 
