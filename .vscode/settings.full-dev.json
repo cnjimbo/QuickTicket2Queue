@@ -1,0 +1,31 @@
+{
+    "task.allowAutomaticTasks": "on",
+    "npm.autoDetect": "on",
+    "js/ts.tsserver.automaticTypeAcquisition.enabled": true,
+    "js/ts.tsserver.experimental.enableProjectDiagnostics": true,
+    "js/ts.suggest.autoImports": true,
+    "eslint.run": "onType",
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "terminal.integrated.defaultProfile.windows": "PowerShell UTF-8",
+    "terminal.integrated.profiles.windows": {
+        "PowerShell UTF-8": {
+            "source": "PowerShell",
+            "args": [
+                "-NoExit",
+                "-Command",
+                "chcp 65001 > $null; [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false)"
+            ]
+        }
+    },
+    "terminal.integrated.fontFamily": "Cascadia Mono, Segoe UI Emoji",
+    "terminal.integrated.unicodeVersion": "11",
+    "eslint.validate": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact",
+        "vue"
+    ]
+}

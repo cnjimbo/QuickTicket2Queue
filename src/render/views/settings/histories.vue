@@ -142,7 +142,7 @@ const copyTicket = async (history: TicketHistoryItem) => {
   })
 
   await router.push({
-    path: '/ticket/ticket',
+    path: '/ticket/external',
     query: {
       fromHistoryCopy: '1',
       copyUserName: history.ticket.userName ?? '',

@@ -9,7 +9,7 @@ import { AppServiceOS } from "./app.service.os";
 import { AppServiceStore } from "./app.service.store";
 import { AppServiceHttp } from "./app.service.http";
 
-type WebSessionAuth = {
+export type WebSessionAuth = {
   cookieHeader: string;
   userToken: string;
   referer: string;

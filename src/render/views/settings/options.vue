@@ -215,7 +215,7 @@ const handleSuggestDefaultQueue = () => {
 
 const jumpToTicket = async (queue: string) => {
     await router.push({
-        path: '/ticket/ticket',
+        path: '/ticket/external',
         query: {
             queue,
         },

@@ -65,8 +65,8 @@ export const useTicketStore = defineStore("ticket", () => {
     undefined as TicketResponse | undefined,
     { immediate: false, resetOnExecute: false },
   );
-  const { execute: executeSubmitTicketViaWebSession, isLoading: isSubmittingViaWebSession } = useAsyncState(
-    (payload: TicketType) => window.electron.ticketViaWebSession(payload),
+  const { execute: executeSubmitInternalTicket, isLoading: isSubmittingInternalTicket } = useAsyncState(
+    (payload: TicketType) => window.electron.internalTicket(payload),
     undefined as TicketResponse | undefined,
     { immediate: false, resetOnExecute: false },
   );
@@ -192,7 +192,7 @@ export const useTicketStore = defineStore("ticket", () => {
     return undefined;
   };
 
-  const submitTicketViaWebSession = async () => {
+  const submitInternalTicket = async () => {
     const validationError = validateTicket();
     if (validationError) {
       return validationError;
@@ -203,7 +203,7 @@ export const useTicketStore = defineStore("ticket", () => {
       const payload = toRaw(ticket);
       saveTicketDraft();
 
-      const res = await executeSubmitTicketViaWebSession(0, payload);
+      const res = await executeSubmitInternalTicket(0, payload);
       setResult(res);
     } catch (error) {
       const message =
@@ -219,7 +219,7 @@ export const useTicketStore = defineStore("ticket", () => {
     validationMessages,
     result,
     isSubmitting,
-    isSubmittingViaWebSession,
+    isSubmittingInternalTicket,
     isFormValid,
     hasUnsavedDraftChanges,
     setTicketField,
@@ -235,6 +235,6 @@ export const useTicketStore = defineStore("ticket", () => {
     validateTicket,
     setResult,
     submitTicket,
-    submitTicketViaWebSession,
+    submitInternalTicket,
   };
 });

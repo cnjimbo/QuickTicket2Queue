@@ -7,6 +7,10 @@ export interface IpcInvokeMap {
     params: [item: TicketQueueOption]
     return: Promise<void>
   }
+  'check-for-app-updates': {
+    params: []
+    return: Promise<ManualUpdateResult>
+  }
   'clear-ticket-history': {
     params: []
     return: Promise<void>
@@ -18,6 +22,14 @@ export interface IpcInvokeMap {
   'delete-ticket-option': {
     params: [queue: string]
     return: Promise<void>
+  }
+  'download-app-update': {
+    params: []
+    return: Promise<ManualUpdateResult>
+  }
+  'get-app-version': {
+    params: []
+    return: Promise<string>
   }
   'get-domain-user': {
     params: []
@@ -31,9 +43,25 @@ export interface IpcInvokeMap {
     params: []
     return: Promise<TicketQueueOption[]>
   }
+  'get-update-preferences': {
+    params: []
+    return: Promise<UpdatePreferences>
+  }
   'getCurrent': {
     params: []
     return: Promise<CredentialItem>
+  }
+  'install-downloaded-app-update': {
+    params: []
+    return: Promise<boolean>
+  }
+  'internal-ticket': {
+    params: [data: TicketType]
+    return: Promise<TicketResponse>
+  }
+  'is-domain-environment': {
+    params: []
+    return: Promise<boolean>
   }
   'open-link': {
     params: [url: string]
@@ -55,15 +83,15 @@ export interface IpcInvokeMap {
     params: [data: CredentialItem[]]
     return: Promise<true>
   }
+  'set-update-preferences': {
+    params: [partialPreferences: { includeBeta?: boolean | undefined; } | undefined]
+    return: Promise<UpdatePreferences>
+  }
   'sync-ticket-options-from-github': {
     params: [mode: "merge" | "overwrite"]
     return: Promise<TicketQueueOption[]>
   }
   'ticket': {
-    params: [data: TicketType]
-    return: Promise<TicketResponse>
-  }
-  'ticket-via-web-session': {
     params: [data: TicketType]
     return: Promise<TicketResponse>
   }

@@ -61,9 +61,16 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/ticket/ticket': RouteRecordInfo<
-      '/ticket/ticket',
-      '/ticket/ticket',
+    '/ticket/external': RouteRecordInfo<
+      '/ticket/external',
+      '/ticket/external',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/ticket/internal': RouteRecordInfo<
+      '/ticket/internal',
+      '/ticket/internal',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -111,9 +118,15 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
-    'src/render/views/ticket/ticket.vue': {
+    'src/render/views/ticket/external.vue': {
       routes:
-        | '/ticket/ticket'
+        | '/ticket/external'
+      views:
+        | never
+    }
+    'src/render/views/ticket/internal.vue': {
+      routes:
+        | '/ticket/internal'
       views:
         | never
     }
