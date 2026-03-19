@@ -29,7 +29,7 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-auto_tag_release
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-auto_tag_release
       cancel-in-progress: true
     permissions:
       contents: write
@@ -167,6 +167,16 @@ jobs:
           git push origin "$PUBLISH_TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
 
+      - name: Fail when version does not match branch policy
+        if: steps.version_check.outputs.skip_reason != ''
+        run: |
+          echo "::error::版本校验失败：${{ steps.version_check.outputs.skip_reason }}"
+          echo "branch_name=${{ steps.version_check.outputs.branch_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "current_version=${{ steps.version_check.outputs.current_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "status=failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "reason=${{ steps.version_check.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
       - name: Create GitHub draft release
         id: create_release
         if: github.event_name == 'push' && steps.create_tag.outputs.created == 'true'
@@ -211,7 +221,7 @@ jobs:
     if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
     timeout-minutes: 90
     concurrency:
-      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-release-${{ matrix.os }}
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-release-${{ matrix.os }}
       cancel-in-progress: true
     strategy:
       matrix:
@@ -277,7 +287,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
     concurrency:
-      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-finalize_release
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-finalize_release
       cancel-in-progress: true
     permissions:
       contents: write
@@ -358,7 +368,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && github.event_name == 'push' && needs.auto_tag_release.outputs.publish_tag_name != '' && (needs.auto_tag_release.result != 'success' || needs.release.result != 'success' || needs.finalize_release.result != 'success')
     concurrency:
-      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-cleanup_on_failure_or_cancel
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-cleanup_on_failure_or_cancel
       cancel-in-progress: true
     permissions:
       contents: write
