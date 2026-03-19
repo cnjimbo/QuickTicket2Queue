@@ -280,7 +280,7 @@ async function handleUpdatePreferenceChange(value: string | number | boolean) {
     includeBetaUpdates.value = previousValue
     await window.electron.showNativeDialog({
       title: '保存更新设置失败',
-      message: '保存“接收 Beta 版本更新”设置失败，请稍后重试。',
+      message: '保存“接收 Pre 版更新”设置失败，请稍后重试。',
       buttons: ['确定'],
       type: 'error',
     })
@@ -391,7 +391,7 @@ const navLinks = computed(() => {
           </button>
           <div v-if="link.to.includes('/help')" class="update-version">当前版本 {{ currentVersion || '-' }}</div>
           <div v-if="link.to.includes('/help')" class="update-beta-toggle">
-            <span class="update-beta-toggle__label">接收 Beta 版本更新</span>
+            <span class="update-beta-toggle__label">接收 Pre 版更新</span>
             <el-switch :model-value="includeBetaUpdates" size="small"
               :loading="isLoadingUpdatePreferences || isSavingUpdatePreferences" inline-prompt active-text="开"
               inactive-text="关" @change="handleUpdatePreferenceChange" />

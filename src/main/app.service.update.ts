@@ -28,6 +28,11 @@ type DownloadProgressPayload = {
     bytesPerSecond: number;
 };
 
+type AppPrereleaseChannel = "alpha" | "beta" | "rc";
+
+const APP_PRERELEASE_VERSION_PATTERN = /^\d+\.\d+\.\d+-(alpha|beta|rc)\.\d+$/;
+const APP_STABLE_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
 @Injectable()
 export class AppServiceUpdate {
     private initialized = false;
@@ -56,9 +61,35 @@ export class AppServiceUpdate {
         };
     }
 
+    private resolveUpdaterChannel(preferences: UpdatePreferences): "latest" | "rc" {
+        if (!preferences.includeBeta) {
+            return "latest";
+        }
+
+        return "rc";
+    }
+
+    private isAllowedUpdateVersion(version: string, includePrerelease: boolean): boolean {
+        if (APP_STABLE_VERSION_PATTERN.test(version)) {
+            return true;
+        }
+
+        const prereleaseChannel = APP_PRERELEASE_VERSION_PATTERN.exec(version)?.[1] as AppPrereleaseChannel | undefined;
+        if (!prereleaseChannel) {
+            return false;
+        }
+
+        if (!includePrerelease) {
+            return false;
+        }
+
+        // Only RC prerelease updates are allowed in preview mode.
+        return prereleaseChannel === "rc";
+    }
+
     private applyUpdatePreferences(preferences = this.getUpdatePreferencesValue()): UpdatePreferences {
         autoUpdater.allowPrerelease = preferences.includeBeta;
-        autoUpdater.channel = preferences.includeBeta ? "beta" : "latest";
+        autoUpdater.channel = this.resolveUpdaterChannel(preferences);
         return preferences;
     }
 
@@ -108,6 +139,7 @@ export class AppServiceUpdate {
         this.applyUpdatePreferences();
         autoUpdater.autoDownload = false;
         autoUpdater.autoInstallOnAppQuit = false;
+        autoUpdater.allowDowngrade = true;
 
         autoUpdater.on("error", (error) => {
             console.error("Auto update error:", error);
@@ -191,6 +223,18 @@ export class AppServiceUpdate {
                     status: "up-to-date",
                     version: currentVersion,
                     releaseUrl: this.getGitHubReleasesUrl(preferences.includeBeta),
+                    preferences,
+                };
+            }
+
+            if (!this.isAllowedUpdateVersion(updateInfo.version, preferences.includeBeta)) {
+                this.availableUpdateInfo = null;
+                this.downloadedUpdateInfo = null;
+                return {
+                    status: "up-to-date",
+                    version: currentVersion,
+                    releaseUrl: this.getGitHubReleasesUrl(preferences.includeBeta),
+                    message: `检测到不受支持的更新版本 ${updateInfo.version}，已忽略（仅支持正式版与 RC）。`,
                     preferences,
                 };
             }
