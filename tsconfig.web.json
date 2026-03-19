@@ -13,6 +13,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ESNext",
+    "rootDir": ".",
     "types": [
       "vite/client",
       "vue-router/volar/sfc-route-blocks",

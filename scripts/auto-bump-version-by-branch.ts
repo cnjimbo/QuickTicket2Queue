@@ -1,11 +1,16 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { assertSupportedAppVersion, readAppVersion } from "./app-version";
+import {
+    assertSupportedAppVersion,
+    formatPrereleaseAppVersion,
+    type AppReleaseChannel,
+    parsePrereleaseAppVersion,
+    readAppVersion,
+    STABLE_APP_VERSION_PATTERN,
+} from "./app-version";
 
 const STABLE_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
-const ALPHA_PATTERN = /^(\d+)\.(\d+)\.(\d+)-alpha\.(\d+)$/;
-const BETA_PATTERN = /^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/;
 
 function getCurrentBranch(): string {
     try {
@@ -28,26 +33,59 @@ function bumpStablePatch(version: string): string {
     return `${major}.${minor}.${patch + 1}`;
 }
 
-function toNextBetaFromStable(version: string): string {
+function detectTargetReleaseChannel(branchName: string): AppReleaseChannel | null {
+    if (branchName === "main") {
+        return "stable";
+    }
+
+    if (branchName === "develop") {
+        return "beta";
+    }
+
+    if (branchName.startsWith("release/")) {
+        return "rc";
+    }
+
+    if (branchName.startsWith("feature/")) {
+        return "alpha";
+    }
+
+    return null;
+}
+
+function toTargetPrerelease(version: string, channel: Exclude<AppReleaseChannel, "stable">): string {
+    const prereleaseVersion = parsePrereleaseAppVersion(version);
+    if (prereleaseVersion) {
+        if (prereleaseVersion.channel === channel) {
+            return version;
+        }
+
+        return formatPrereleaseAppVersion(
+            prereleaseVersion.major,
+            prereleaseVersion.minor,
+            prereleaseVersion.patch,
+            channel,
+        );
+    }
+
     const nextStable = bumpStablePatch(version);
-    return `${nextStable}-beta.1`;
+    const match = STABLE_PATTERN.exec(nextStable);
+    if (!match) {
+        return version;
+    }
+
+    return formatPrereleaseAppVersion(
+        Number(match[1]),
+        Number(match[2]),
+        Number(match[3]),
+        channel,
+    );
 }
 
 function toStableFromPrerelease(version: string): string {
-    const alphaMatch = ALPHA_PATTERN.exec(version);
-    if (alphaMatch) {
-        const major = Number(alphaMatch[1]);
-        const minor = Number(alphaMatch[2]);
-        const patch = Number(alphaMatch[3]);
-        return `${major}.${minor}.${patch}`;
-    }
-
-    const betaMatch = BETA_PATTERN.exec(version);
-    if (betaMatch) {
-        const major = Number(betaMatch[1]);
-        const minor = Number(betaMatch[2]);
-        const patch = Number(betaMatch[3]);
-        return `${major}.${minor}.${patch}`;
+    const prereleaseVersion = parsePrereleaseAppVersion(version);
+    if (prereleaseVersion) {
+        return `${prereleaseVersion.major}.${prereleaseVersion.minor}.${prereleaseVersion.patch}`;
     }
 
     return version;
@@ -75,28 +113,18 @@ function main(): void {
     const failIfUpdated = process.argv.includes("--fail-if-updated");
     const currentVersion = readAppVersion(projectRoot);
     const branchName = getCurrentBranch();
-    const isMainBranch = branchName === "main";
+    const targetReleaseChannel = detectTargetReleaseChannel(branchName);
 
     assertSupportedAppVersion(currentVersion, "git-hook");
 
-    const isStable = STABLE_PATTERN.test(currentVersion);
-    const isAlpha = ALPHA_PATTERN.test(currentVersion);
-    const isBeta = BETA_PATTERN.test(currentVersion);
-
     let nextVersion = currentVersion;
 
-    if (isMainBranch) {
-        if (isStable) {
-            nextVersion = currentVersion;
-        } else if (isAlpha || isBeta) {
-            nextVersion = toStableFromPrerelease(currentVersion);
-        }
-    } else {
-        if (isStable) {
-            nextVersion = toNextBetaFromStable(currentVersion);
-        } else if (isAlpha || isBeta) {
-            nextVersion = currentVersion;
-        }
+    if (targetReleaseChannel === "stable") {
+        nextVersion = STABLE_APP_VERSION_PATTERN.test(currentVersion)
+            ? currentVersion
+            : toStableFromPrerelease(currentVersion);
+    } else if (targetReleaseChannel) {
+        nextVersion = toTargetPrerelease(currentVersion, targetReleaseChannel);
     }
 
     if (nextVersion === currentVersion) {

@@ -65,24 +65,53 @@ jobs:
           RELEASE_VERSION="$CURRENT_VERSION"
           SKIP_REASON=""
           RELEASE_TYPE="release"
+          RELEASE_CHANNEL="stable"
           TAG_NAME="v$RELEASE_VERSION"
           PUBLISH_TAG_NAME="$TAG_NAME"
           PUBLISH_TAG_PREFIX="v"
           SHORT_SHA="${GITHUB_SHA::7}"
           STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
-          PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$'
+          PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
+          PRE_CHANNEL_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
+
+          if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_CHANNEL_PATTERN"; then
+            RELEASE_CHANNEL=$(printf '%s' "$CURRENT_VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+-((alpha|beta|rc))\.[0-9]+$/\1/')
+          fi
+
+          EXPECTED_RELEASE_CHANNEL=""
+          EXPECTED_VERSION_HINT=""
 
           if [ "$BRANCH_NAME" = "main" ]; then
+            EXPECTED_RELEASE_CHANNEL="stable"
+            EXPECTED_VERSION_HINT='x.y.z'
+          elif [ "$BRANCH_NAME" = "develop" ]; then
+            EXPECTED_RELEASE_CHANNEL="beta"
+            EXPECTED_VERSION_HINT='x.y.z-beta.N'
+          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^release/'; then
+            EXPECTED_RELEASE_CHANNEL="rc"
+            EXPECTED_VERSION_HINT='x.y.z-rc.N'
+          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^feature/'; then
+            EXPECTED_RELEASE_CHANNEL="alpha"
+            EXPECTED_VERSION_HINT='x.y.z-alpha.N'
+          fi
+
+          if [ "$EXPECTED_RELEASE_CHANNEL" = "stable" ]; then
             if printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN"; then
               PRERELEASE="false"
               RELEASE_TYPE="release"
-            elif printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
+            else
+              PRERELEASE="false"
+              SHOULD_TAG="false"
+              SKIP_REASON="main 分支必须使用 stable 版本号，格式为 `x.y.z`。"
+            fi
+          elif [ -n "$EXPECTED_RELEASE_CHANNEL" ]; then
+            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN" && [ "$RELEASE_CHANNEL" = "$EXPECTED_RELEASE_CHANNEL" ]; then
               PRERELEASE="true"
               RELEASE_TYPE="prerelease"
             else
               PRERELEASE="false"
               SHOULD_TAG="false"
-              SKIP_REASON="main 分支版本号不符合发布规则。仅接受 `x.y.z`、`x.y.z-alpha.N`、`x.y.z-beta.N` 三种格式。"
+              SKIP_REASON="$BRANCH_NAME 分支必须使用 $EXPECTED_RELEASE_CHANNEL 阶段版本号，格式为 \`$EXPECTED_VERSION_HINT\`。"
             fi
           else
             if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
@@ -91,7 +120,7 @@ jobs:
             else
               PRERELEASE="false"
               SHOULD_TAG="false"
-              SKIP_REASON="非 main 分支仅允许发布 prerelease，版本号必须为 `x.y.z-alpha.N` 或 `x.y.z-beta.N`。"
+              SKIP_REASON="未识别分支仅允许发布 prerelease，版本号必须为 `x.y.z-alpha.N`、`x.y.z-beta.N` 或 `x.y.z-rc.N`。"
             fi
           fi
 
@@ -112,7 +141,7 @@ jobs:
             fi
           fi
 
-          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION release_type=${RELEASE_TYPE:-unknown} prerelease=${PRERELEASE:-unknown} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
+          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION release_type=${RELEASE_TYPE:-unknown} release_channel=${RELEASE_CHANNEL:-unknown} prerelease=${PRERELEASE:-unknown} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
 
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
