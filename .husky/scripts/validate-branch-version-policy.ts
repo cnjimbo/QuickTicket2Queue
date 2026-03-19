@@ -1,12 +1,10 @@
 import { execSync } from "node:child_process";
 import {
-    type AppReleaseChannel,
     assertSupportedAppVersion,
-    detectTargetReleaseChannel,
-    getExpectedVersionHint,
-    parsePrereleaseAppVersion,
+    getBranchVersionPolicy,
+    getExpectedVersionHintForPolicy,
+    isVersionAllowedForPolicy,
     readAppVersion,
-    STABLE_APP_VERSION_PATTERN,
 } from "./app-version";
 
 const SUPPORTED_BRANCH_HINT = "Supported branches are main, develop, feature/*, and release/*.";
@@ -16,19 +14,10 @@ function fail(message: string): never {
     process.exit(1);
 }
 
-function isVersionAllowedForChannel(version: string, channel: AppReleaseChannel): boolean {
-    if (channel === "stable") {
-        return STABLE_APP_VERSION_PATTERN.test(version);
-    }
-
-    const prereleaseVersion = parsePrereleaseAppVersion(version);
-    return Boolean(prereleaseVersion && prereleaseVersion.channel === channel);
-}
-
-function buildVersionMismatchMessage(branchName: string, currentVersion: string, channel: AppReleaseChannel): string {
+function buildVersionMismatchMessage(branchName: string, currentVersion: string, expectedHint: string): string {
     return (
-        `branch ${branchName} requires ${getExpectedVersionHint(channel)}, ` +
-        `but package.json version is ${currentVersion}.`
+        `branch ${branchName} requires ${expectedHint}, ` +
+        `but package.json version is ${currentVersion}. ${SUPPORTED_BRANCH_HINT}`
     );
 }
 
@@ -50,10 +39,7 @@ function main(): void {
         fail("detached HEAD is not supported for versioned commit/push flow.");
     }
 
-    const targetReleaseChannel = detectTargetReleaseChannel(branchName);
-    if (!targetReleaseChannel) {
-        fail(`unsupported branch "${branchName}". ${SUPPORTED_BRANCH_HINT}`);
-    }
+    const policy = getBranchVersionPolicy(branchName);
 
     let currentVersion = "";
     try {
@@ -64,8 +50,13 @@ function main(): void {
         fail(message);
     }
 
-    if (!isVersionAllowedForChannel(currentVersion, targetReleaseChannel)) {
-        fail(buildVersionMismatchMessage(branchName, currentVersion, targetReleaseChannel));
+    if (!policy.enforce) {
+        console.log(`[hook] branch policy check skipped: ${branchName} is unrestricted, version=${currentVersion}`);
+        return;
+    }
+
+    if (!isVersionAllowedForPolicy(currentVersion, policy)) {
+        fail(buildVersionMismatchMessage(branchName, currentVersion, getExpectedVersionHintForPolicy(policy)));
     }
 
     console.log(`[hook] branch policy check passed: ${branchName} -> ${currentVersion}`);

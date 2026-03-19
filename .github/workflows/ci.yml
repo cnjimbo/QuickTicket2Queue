@@ -37,11 +37,13 @@ jobs:
       branch_name: ${{ steps.version_check.outputs.branch_name }}
       current_version: ${{ steps.version_check.outputs.current_version }}
       release_version: ${{ steps.version_check.outputs.release_version }}
+      release_enabled: ${{ steps.version_check.outputs.release_enabled }}
       tag_name: ${{ steps.version_check.outputs.tag_name }}
       publish_tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
       publish_tag_prefix: ${{ steps.version_check.outputs.publish_tag_prefix }}
       should_tag: ${{ steps.version_check.outputs.should_tag }}
       skip_reason: ${{ steps.version_check.outputs.skip_reason }}
+      policy_error: ${{ steps.version_check.outputs.policy_error }}
       prerelease: ${{ steps.version_check.outputs.prerelease }}
       release_type: ${{ steps.version_check.outputs.release_type }}
       overwrite: ${{ steps.version_check.outputs.overwrite }}
@@ -70,6 +72,8 @@ jobs:
           PUBLISH_TAG_NAME="$TAG_NAME"
           PUBLISH_TAG_PREFIX="v"
           SHORT_SHA="${GITHUB_SHA::7}"
+          RELEASE_ENABLED="false"
+          POLICY_ERROR=""
           STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
           PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
           PRE_CHANNEL_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
@@ -78,48 +82,60 @@ jobs:
             RELEASE_CHANNEL=$(printf '%s' "$CURRENT_VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+-((alpha|beta|rc))\.[0-9]+$/\1/')
           fi
 
-          EXPECTED_RELEASE_CHANNEL=""
+          EXPECTED_RELEASE_CHANNELS=""
+          EXPECTED_PRIMARY_CHANNEL=""
           EXPECTED_VERSION_HINT=""
 
           if [ "$BRANCH_NAME" = "main" ]; then
-            EXPECTED_RELEASE_CHANNEL="stable"
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS="stable"
             EXPECTED_VERSION_HINT='x.y.z'
           elif [ "$BRANCH_NAME" = "develop" ]; then
-            EXPECTED_RELEASE_CHANNEL="beta"
-            EXPECTED_VERSION_HINT='x.y.z-beta.N'
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS='alpha beta'
+            EXPECTED_PRIMARY_CHANNEL='beta'
+            EXPECTED_VERSION_HINT='x.y.z-alpha.N or x.y.z-beta.N'
           elif printf '%s' "$BRANCH_NAME" | grep -Eq '^release/'; then
-            EXPECTED_RELEASE_CHANNEL="rc"
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS="rc"
+            EXPECTED_PRIMARY_CHANNEL="rc"
             EXPECTED_VERSION_HINT='x.y.z-rc.N'
           elif printf '%s' "$BRANCH_NAME" | grep -Eq '^feature/'; then
-            EXPECTED_RELEASE_CHANNEL="alpha"
-            EXPECTED_VERSION_HINT='x.y.z-alpha.N'
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS='alpha beta'
+            EXPECTED_PRIMARY_CHANNEL='alpha'
+            EXPECTED_VERSION_HINT='x.y.z-alpha.N or x.y.z-beta.N'
           fi
 
-          if [ "$EXPECTED_RELEASE_CHANNEL" = "stable" ]; then
+          if ! printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN|$PRE_PATTERN"; then
+            PRERELEASE="false"
+            SHOULD_TAG="false"
+            POLICY_ERROR="版本格式非法：$CURRENT_VERSION。仅支持 x.y.z、x.y.z-alpha.N、x.y.z-beta.N、x.y.z-rc.N。"
+          elif [ "$EXPECTED_RELEASE_CHANNELS" = "stable" ]; then
             if printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN"; then
               PRERELEASE="false"
               RELEASE_TYPE="release"
             else
               PRERELEASE="false"
               SHOULD_TAG="false"
-              SKIP_REASON="main 分支必须使用 stable 版本号，格式为 `x.y.z`。"
+              POLICY_ERROR="branch requires expected version pattern but got current version: branch=$BRANCH_NAME expected=x.y.z actual=$CURRENT_VERSION"
             fi
-          elif [ -n "$EXPECTED_RELEASE_CHANNEL" ]; then
-            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN" && [ "$RELEASE_CHANNEL" = "$EXPECTED_RELEASE_CHANNEL" ]; then
+          elif [ -n "$EXPECTED_RELEASE_CHANNELS" ]; then
+            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN" && printf '%s' " $EXPECTED_RELEASE_CHANNELS " | grep -Fq " $RELEASE_CHANNEL "; then
               PRERELEASE="true"
               RELEASE_TYPE="prerelease"
             else
               PRERELEASE="false"
               SHOULD_TAG="false"
-              SKIP_REASON="$BRANCH_NAME 分支必须使用 $EXPECTED_RELEASE_CHANNEL 阶段版本号，格式为 \`$EXPECTED_VERSION_HINT\`。"
+              POLICY_ERROR="branch requires expected version pattern but got current version: branch=$BRANCH_NAME expected=$EXPECTED_VERSION_HINT actual=$CURRENT_VERSION"
             fi
           else
             PRERELEASE="false"
             SHOULD_TAG="false"
-            SKIP_REASON="不支持的分支前缀：$BRANCH_NAME。仅允许 main、develop、feature/*、release/*。"
+            SKIP_REASON="当前分支 $BRANCH_NAME 不参与 CI 发布。"
           fi
 
-          if [ -z "$SKIP_REASON" ]; then
+          if [ -z "$POLICY_ERROR" ] && [ "$RELEASE_ENABLED" = "true" ]; then
             git fetch --tags
             TAG_EXISTS=false
             RELEASE_EXISTS=false
@@ -141,8 +157,10 @@ jobs:
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_enabled=$RELEASE_ENABLED" >> "$GITHUB_OUTPUT"
           echo "should_tag=$SHOULD_TAG" >> "$GITHUB_OUTPUT"
           echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
+          echo "policy_error=$POLICY_ERROR" >> "$GITHUB_OUTPUT"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "publish_tag_name=$PUBLISH_TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "publish_tag_prefix=$PUBLISH_TAG_PREFIX" >> "$GITHUB_OUTPUT"
@@ -168,13 +186,13 @@ jobs:
           echo "created=true" >> "$GITHUB_OUTPUT"
 
       - name: Fail when version does not match branch policy
-        if: steps.version_check.outputs.skip_reason != ''
+        if: steps.version_check.outputs.policy_error != ''
         run: |
-          echo "::error::版本校验失败：${{ steps.version_check.outputs.skip_reason }}"
+          echo "::error::版本校验失败：${{ steps.version_check.outputs.policy_error }}"
           echo "branch_name=${{ steps.version_check.outputs.branch_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "current_version=${{ steps.version_check.outputs.current_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "status=failed" >> "$GITHUB_STEP_SUMMARY"
-          echo "reason=${{ steps.version_check.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "reason=${{ steps.version_check.outputs.policy_error }}" >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
       - name: Create GitHub draft release
@@ -207,10 +225,14 @@ jobs:
           echo "tag_name=${{ steps.version_check.outputs.tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "publish_tag_name=${{ steps.version_check.outputs.publish_tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "publish_tag_prefix=${{ steps.version_check.outputs.publish_tag_prefix }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "release_enabled=${{ steps.version_check.outputs.release_enabled }}" >> "$GITHUB_STEP_SUMMARY"
           echo "should_tag=${{ steps.version_check.outputs.should_tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "overwrite=${{ steps.version_check.outputs.overwrite }}" >> "$GITHUB_STEP_SUMMARY"
           echo "prerelease=${{ steps.version_check.outputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
           echo "release_type=${{ steps.version_check.outputs.release_type }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.version_check.outputs.policy_error }}" ]; then
+            echo "policy_error=${{ steps.version_check.outputs.policy_error }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -n "${{ steps.version_check.outputs.skip_reason }}" ]; then
             echo "skip_reason=${{ steps.version_check.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
           fi

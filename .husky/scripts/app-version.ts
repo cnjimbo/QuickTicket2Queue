@@ -7,6 +7,13 @@ export const PRERELEASE_APP_VERSION_PATTERN =
 
 export type AppPrereleaseChannel = "alpha" | "beta" | "rc";
 export type AppReleaseChannel = AppPrereleaseChannel | "stable";
+export type BranchVersionPolicy = {
+    branchType: "main" | "develop" | "feature" | "release" | "other";
+    enforce: boolean;
+    releaseEnabled: boolean;
+    allowedChannels: AppReleaseChannel[];
+    preferredPrereleaseChannel?: AppPrereleaseChannel;
+};
 
 export function parsePrereleaseAppVersion(version: string): {
     major: number;
@@ -39,24 +46,61 @@ export function formatPrereleaseAppVersion(
     return `${major}.${minor}.${patch}-${channel}.${sequence}`;
 }
 
-export function detectTargetReleaseChannel(branchName: string): AppReleaseChannel | null {
+export function getBranchVersionPolicy(branchName: string): BranchVersionPolicy {
     if (branchName === "main") {
-        return "stable";
+        return {
+            branchType: "main",
+            enforce: true,
+            releaseEnabled: true,
+            allowedChannels: ["stable"],
+        };
     }
 
     if (branchName === "develop") {
-        return "beta";
+        return {
+            branchType: "develop",
+            enforce: true,
+            releaseEnabled: true,
+            allowedChannels: ["alpha", "beta"],
+            preferredPrereleaseChannel: "beta",
+        };
     }
 
     if (branchName.startsWith("release/")) {
-        return "rc";
+        return {
+            branchType: "release",
+            enforce: true,
+            releaseEnabled: true,
+            allowedChannels: ["rc"],
+            preferredPrereleaseChannel: "rc",
+        };
     }
 
     if (branchName.startsWith("feature/")) {
-        return "alpha";
+        return {
+            branchType: "feature",
+            enforce: true,
+            releaseEnabled: true,
+            allowedChannels: ["alpha", "beta"],
+            preferredPrereleaseChannel: "alpha",
+        };
     }
 
-    return null;
+    return {
+        branchType: "other",
+        enforce: false,
+        releaseEnabled: false,
+        allowedChannels: ["stable", "alpha", "beta", "rc"],
+    };
+}
+
+export function detectTargetReleaseChannel(branchName: string): AppReleaseChannel | null {
+    const policy = getBranchVersionPolicy(branchName);
+    if (!policy.enforce) {
+        return null;
+    }
+
+    return policy.allowedChannels[0] ?? null;
 }
 
 export function getExpectedVersionHint(channel: AppReleaseChannel): string {
@@ -70,6 +114,29 @@ export function getExpectedVersionHint(channel: AppReleaseChannel): string {
         case "rc":
             return "x.y.z-rc.N";
     }
+}
+
+export function getExpectedVersionHintForPolicy(policy: BranchVersionPolicy): string {
+    if (!policy.enforce) {
+        return "x.y.z | x.y.z-alpha.N | x.y.z-beta.N | x.y.z-rc.N";
+    }
+
+    return policy.allowedChannels
+        .map((channel) => getExpectedVersionHint(channel))
+        .join(" or ");
+}
+
+export function isVersionAllowedForPolicy(version: string, policy: BranchVersionPolicy): boolean {
+    if (policy.allowedChannels.includes("stable") && STABLE_APP_VERSION_PATTERN.test(version)) {
+        return true;
+    }
+
+    const prereleaseVersion = parsePrereleaseAppVersion(version);
+    if (!prereleaseVersion) {
+        return false;
+    }
+
+    return policy.allowedChannels.includes(prereleaseVersion.channel);
 }
 
 export function readAppVersion(projectRoot = process.cwd()): string {

@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 import {
     assertSupportedAppVersion,
-    detectTargetReleaseChannel,
     formatPrereleaseAppVersion,
+    getBranchVersionPolicy,
+    isVersionAllowedForPolicy,
     parsePrereleaseAppVersion,
     readAppVersion,
     STABLE_APP_VERSION_PATTERN,
@@ -93,18 +94,23 @@ function main(): void {
     const failIfUpdated = process.argv.includes("--fail-if-updated");
     const currentVersion = readAppVersion(projectRoot);
     const branchName = getCurrentBranch();
-    const targetReleaseChannel = detectTargetReleaseChannel(branchName);
+    const policy = getBranchVersionPolicy(branchName);
 
     assertSupportedAppVersion(currentVersion, "git-hook");
 
     let nextVersion = currentVersion;
 
-    if (targetReleaseChannel === "stable") {
+    if (!policy.enforce) {
+        console.log(`[hook] version unchanged on branch ${branchName || "<unknown>"}: ${currentVersion}`);
+        return;
+    }
+
+    if (policy.allowedChannels.includes("stable")) {
         nextVersion = STABLE_APP_VERSION_PATTERN.test(currentVersion)
             ? currentVersion
             : toStableFromPrerelease(currentVersion);
-    } else if (targetReleaseChannel) {
-        nextVersion = toTargetPrerelease(currentVersion, targetReleaseChannel);
+    } else if (!isVersionAllowedForPolicy(currentVersion, policy) && policy.preferredPrereleaseChannel) {
+        nextVersion = toTargetPrerelease(currentVersion, policy.preferredPrereleaseChannel);
     }
 
     if (nextVersion === currentVersion) {
