@@ -84,7 +84,7 @@ export interface IpcInvokeMap {
     return: Promise<true>
   }
   'set-update-preferences': {
-    params: [partialPreferences: { includeBeta?: boolean | undefined; } | undefined]
+    params: [partialPreferences: { includeBeta?: boolean | undefined; allowDowngrade?: boolean | undefined; } | undefined]
     return: Promise<UpdatePreferences>
   }
   'sync-ticket-options-from-github': {

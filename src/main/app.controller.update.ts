@@ -34,7 +34,7 @@ export class AppControllerUpdate {
 
     @IpcHandle("set-update-preferences")
     public async setUpdatePreferences(
-        @Payload() partialPreferences: { includeBeta?: boolean } | undefined,
+        @Payload() partialPreferences: { includeBeta?: boolean; allowDowngrade?: boolean } | undefined,
     ) {
         return await this.updateService.setUpdatePreferences(partialPreferences);
     }
