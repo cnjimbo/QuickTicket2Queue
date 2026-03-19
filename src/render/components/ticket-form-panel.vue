@@ -70,10 +70,16 @@ function normalizeInputValue(value: string | number | undefined | null) {
             <el-text type="primary">Host: {{ current.sn_host }}</el-text>
         </div>
 
-        <el-alert v-if="showSettingsAlert" type="warning" show-icon :closable="false">
-            <template #title>{{ settingsAlertTitle }}</template>
+        <el-alert v-if="showSettingsAlert" class="settings-alert" type="warning" show-icon :closable="false">
+            <template #title>
+                <span class="settings-alert__title">{{ settingsAlertTitle }}</span>
+            </template>
             <template #default>
-                <el-link type="warning" @click.prevent="emit('goCredentialSetting')">前往凭据管理</el-link>
+                <div class="settings-alert__content">
+                    <el-link class="settings-alert__action" type="warning" @click.prevent="emit('goCredentialSetting')">
+                        前往凭据管理
+                    </el-link>
+                </div>
             </template>
         </el-alert>
 
@@ -199,6 +205,52 @@ function normalizeInputValue(value: string | number | undefined | null) {
     color: #f56c6c;
     font-size: 12px;
     margin: -6px 0 4px;
+}
+
+.settings-alert {
+    border-radius: 14px;
+    border: 1px solid rgba(230, 162, 60, 0.26);
+}
+
+.settings-alert :deep(.el-alert__title) {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.settings-alert :deep(.el-alert__content) {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-alert__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #8a5a12;
+    line-height: 1.5;
+}
+
+.settings-alert__content {
+    display: flex;
+    align-items: flex-start;
+}
+
+.settings-alert__action {
+    font-weight: 700;
+}
+
+.settings-alert__action :deep(.el-link__inner) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(230, 162, 60, 0.12);
+    text-decoration: none;
+}
+
+.settings-alert__action:hover :deep(.el-link__inner) {
+    background: rgba(230, 162, 60, 0.18);
 }
 
 @media (max-width: 768px) {

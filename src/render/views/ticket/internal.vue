@@ -6,8 +6,8 @@ import { useTicketPage } from '@render/composables/use-ticket-page'
 
 definePage({
     meta: {
-        label: '工单(内网)',
-        description: '通过网页登录态提交内部工单',
+        label: '工单',
+        description: '[内网]通过网页登录态提交内部工单',
         order: 110,
     },
 })
