@@ -56,6 +56,7 @@
 import { refAutoReset, useAsyncState } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import { useTicketStore } from '@render/stores/ticket'
+import { resolveDefaultTicketPath } from '@render/utils/default-ticket-path'
 import { TicketHistoryItem } from '@/types/orm_types';
 import { getEnvTagType } from '@render/utils/env-tag'
 import { showNativeConfirmDialog } from '@render/utils/native-dialog'
@@ -134,6 +135,8 @@ const openRecord = (url: string) => {
 }
 
 const copyTicket = async (history: TicketHistoryItem) => {
+  const defaultTicketPath = await resolveDefaultTicketPath()
+
   ticketStore.setHistoryCopyPayload({
     userName: history.ticket.userName ?? '',
     title: history.ticket.title ?? '',
@@ -142,7 +145,7 @@ const copyTicket = async (history: TicketHistoryItem) => {
   })
 
   await router.push({
-    path: '/ticket/external',
+    path: defaultTicketPath,
     query: {
       fromHistoryCopy: '1',
       copyUserName: history.ticket.userName ?? '',

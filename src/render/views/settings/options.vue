@@ -54,6 +54,7 @@
 import { refAutoReset, useAsyncState } from '@vueuse/core'
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { resolveDefaultTicketPath } from '@render/utils/default-ticket-path'
 import type { TicketQueueOption } from '@/types/orm_types'
 import { showNativeDialog } from '@render/utils/native-dialog'
 
@@ -214,8 +215,10 @@ const handleSuggestDefaultQueue = () => {
 }
 
 const jumpToTicket = async (queue: string) => {
+    const defaultTicketPath = await resolveDefaultTicketPath()
+
     await router.push({
-        path: '/ticket/external',
+        path: defaultTicketPath,
         query: {
             queue,
         },

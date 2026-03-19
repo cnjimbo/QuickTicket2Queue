@@ -5,7 +5,7 @@ import { createWebHashHistory } from "vue-router";
 import { createRouter } from "vue-router";
 import { routes, handleHotUpdate } from "vue-router/auto-routes";
 import type { RouteRecordRaw } from "vue-router";
-import { memo } from "radash";
+import { resolveDefaultTicketPath } from "@render/utils/default-ticket-path";
 
 const safeRoutes = routes.filter(
   (route): route is RouteRecordRaw =>
@@ -16,15 +16,6 @@ export const router = createRouter({
   history: createWebHashHistory(),
   // resolver,
   routes: safeRoutes,
-});
-
-const resolveDefaultTicketPath = memo(async () => {
-  try {
-    const isDomainEnvironment = await window.electron.isDomainEnvironment();
-    return isDomainEnvironment ? "/ticket/internal" : "/ticket/external";
-  } catch {
-    return "/ticket/external";
-  }
 });
 
 router.beforeEach(async (to) => {
