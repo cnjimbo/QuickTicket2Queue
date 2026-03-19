@@ -4,8 +4,7 @@ import { execSync } from "node:child_process";
 import {
     assertSupportedAppVersion,
     formatPrereleaseAppVersion,
-    getBranchVersionPolicy,
-    isVersionAllowedForPolicy,
+    getHookSyncTargetChannel,
     parsePrereleaseAppVersion,
     readAppVersion,
     STABLE_APP_VERSION_PATTERN,
@@ -87,6 +86,11 @@ function stagePackageJson(projectRoot: string): void {
     execSync("git add package.json", { cwd: projectRoot, stdio: ["ignore", "ignore", "pipe"] });
 }
 
+function fail(message: string): never {
+    console.error(`[hook] version sync failed: ${message}`);
+    process.exit(1);
+}
+
 function main(): void {
     const projectRoot = process.cwd();
     const shouldStage = process.argv.includes("--stage");
@@ -94,24 +98,20 @@ function main(): void {
     const failIfUpdated = process.argv.includes("--fail-if-updated");
     const currentVersion = readAppVersion(projectRoot);
     const branchName = getCurrentBranch();
-    const policy = getBranchVersionPolicy(branchName);
+
+    if (!branchName || branchName === "HEAD") {
+        fail("detached HEAD is not supported for versioned commit/push flow.");
+    }
+
+    const targetChannel = getHookSyncTargetChannel(branchName);
 
     assertSupportedAppVersion(currentVersion, "git-hook");
 
-    let nextVersion = currentVersion;
-
-    if (!policy.enforce) {
-        console.log(`[hook] version unchanged on branch ${branchName || "<unknown>"}: ${currentVersion}`);
-        return;
-    }
-
-    if (policy.allowedChannels.includes("stable")) {
-        nextVersion = STABLE_APP_VERSION_PATTERN.test(currentVersion)
+    const nextVersion = targetChannel === "stable"
+        ? (STABLE_APP_VERSION_PATTERN.test(currentVersion)
             ? currentVersion
-            : toStableFromPrerelease(currentVersion);
-    } else if (!isVersionAllowedForPolicy(currentVersion, policy) && policy.preferredPrereleaseChannel) {
-        nextVersion = toTargetPrerelease(currentVersion, policy.preferredPrereleaseChannel);
-    }
+            : toStableFromPrerelease(currentVersion))
+        : toTargetPrerelease(currentVersion, targetChannel);
 
     if (nextVersion === currentVersion) {
         console.log(`[hook] version unchanged on branch ${branchName || "<unknown>"}: ${currentVersion}`);

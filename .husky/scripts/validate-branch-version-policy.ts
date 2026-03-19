@@ -7,11 +7,18 @@ import {
     readAppVersion,
 } from "./app-version";
 
-const SUPPORTED_BRANCH_HINT = "Supported branches are main, develop, feature/*, and release/*.";
+const SUPPORTED_BRANCH_HINT = "Supported branches are main, develop/*, feature/*, and release/*.";
 
 function fail(message: string): never {
-    console.error(`[hook] branch policy check failed: ${message}`);
+    console.error(`[hook] 校验失败：${message}`);
     process.exit(1);
+}
+
+function failWithContext(branchName: string, expectedHint: string, currentVersion: string, reason: string): never {
+    fail(
+        `${reason}; current_branch=${branchName}; expected=${expectedHint}; ` +
+        `actual=${currentVersion}; supported=${SUPPORTED_BRANCH_HINT}`,
+    );
 }
 
 function buildVersionMismatchMessage(branchName: string, currentVersion: string, expectedHint: string): string {
@@ -36,7 +43,10 @@ function main(): void {
     const branchName = getCurrentBranch();
 
     if (!branchName || branchName === "HEAD") {
-        fail("detached HEAD is not supported for versioned commit/push flow.");
+        fail(
+            "detached HEAD is not supported for versioned commit/push flow; " +
+            `current_branch=${branchName || "HEAD"}; expected=main|develop/*|feature/*|release/*; actual=<unknown>; supported=${SUPPORTED_BRANCH_HINT}`,
+        );
     }
 
     const policy = getBranchVersionPolicy(branchName);
@@ -47,7 +57,7 @@ function main(): void {
         assertSupportedAppVersion(currentVersion, "branch-policy");
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        fail(message);
+        failWithContext(branchName, "x.y.z | x.y.z-alpha.N | x.y.z-beta.N | x.y.z-rc.N", currentVersion || "<empty>", message);
     }
 
     if (!policy.enforce) {
@@ -56,10 +66,15 @@ function main(): void {
     }
 
     if (!isVersionAllowedForPolicy(currentVersion, policy)) {
-        fail(buildVersionMismatchMessage(branchName, currentVersion, getExpectedVersionHintForPolicy(policy)));
+        failWithContext(
+            branchName,
+            getExpectedVersionHintForPolicy(policy),
+            currentVersion,
+            buildVersionMismatchMessage(branchName, currentVersion, getExpectedVersionHintForPolicy(policy)),
+        );
     }
 
-    console.log(`[hook] branch policy check passed: ${branchName} -> ${currentVersion}`);
+    console.log(`校验通过，分支与版本匹配: branch=${branchName}, version=${currentVersion}`);
 }
 
 main();

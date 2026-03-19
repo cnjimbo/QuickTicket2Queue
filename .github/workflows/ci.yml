@@ -90,7 +90,7 @@ jobs:
             RELEASE_ENABLED="true"
             EXPECTED_RELEASE_CHANNELS="stable"
             EXPECTED_VERSION_HINT='x.y.z'
-          elif [ "$BRANCH_NAME" = "develop" ]; then
+          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^develop/'; then
             RELEASE_ENABLED="true"
             EXPECTED_RELEASE_CHANNELS='alpha beta'
             EXPECTED_PRIMARY_CHANNEL='beta'
