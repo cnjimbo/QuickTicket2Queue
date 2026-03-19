@@ -4,10 +4,6 @@ on:
   push:
   pull_request:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
@@ -15,9 +11,26 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  detect_package_version:
+    runs-on: ubuntu-latest
+    outputs:
+      current_version: ${{ steps.read_version.outputs.current_version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Read package version
+        id: read_version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
   auto_tag_release:
+    needs: detect_package_version
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-auto_tag_release
+      cancel-in-progress: true
     permissions:
       contents: write
     outputs:
@@ -44,10 +57,10 @@ jobs:
         id: version_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_VERSION: ${{ needs.detect_package_version.outputs.current_version }}
         run: |
           echo "[信息] 正在根据 package.json 版本号和当前分支判断发布策略"
 
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
           BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           RELEASE_VERSION="$CURRENT_VERSION"
           SKIP_REASON=""
@@ -169,10 +182,13 @@ jobs:
           fi
 
   release:
-    needs: auto_tag_release
+    needs: [detect_package_version, auto_tag_release]
     runs-on: ${{ matrix.os }}
     if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
     timeout-minutes: 90
+    concurrency:
+      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-release-${{ matrix.os }}
+      cancel-in-progress: true
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -233,9 +249,12 @@ jobs:
           gh release upload $env:PUBLISH_TAG_NAME @files --clobber
 
   finalize_release:
-    needs: [auto_tag_release, release]
+    needs: [detect_package_version, auto_tag_release, release]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
+    concurrency:
+      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-finalize_release
+      cancel-in-progress: true
     permissions:
       contents: write
     outputs:
@@ -311,9 +330,12 @@ jobs:
           fi
 
   cleanup_on_failure_or_cancel:
-    needs: [auto_tag_release, release, finalize_release]
+    needs: [detect_package_version, auto_tag_release, release, finalize_release]
     runs-on: ubuntu-latest
     if: always() && github.event_name == 'push' && needs.auto_tag_release.outputs.publish_tag_name != '' && (needs.auto_tag_release.result != 'success' || needs.release.result != 'success' || needs.finalize_release.result != 'success')
+    concurrency:
+      group: ${{ github.workflow }}-${{ needs.detect_package_version.outputs.current_version }}-cleanup_on_failure_or_cancel
+      cancel-in-progress: true
     permissions:
       contents: write
     steps:

@@ -8,7 +8,7 @@ definePage({
     meta: {
         label: '工单',
         description: '[外网]使用 OAuth 凭据创建并提交新的 ServiceNow 工单',
-        order: 100,
+        order: 500,
     },
 })
 
