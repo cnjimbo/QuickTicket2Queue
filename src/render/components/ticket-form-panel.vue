@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import { fieldLabels } from '@render/stores/ticket'
+import { getEnvTagType } from '@render/utils/env-tag'
 import type { CredentialItem, TicketQueueOption, TicketType } from '@/types/orm_types'
 
 type TicketFieldKey = keyof Pick<TicketType, 'userName' | 'title' | 'content' | 'queue_val'>
@@ -66,7 +67,7 @@ function normalizeInputValue(value: string | number | undefined | null) {
     <el-card class="form-card">
         <div class="host-row">
             <el-text type="primary">Env:</el-text>
-            <el-tag>{{ current.env }}</el-tag>
+            <el-tag :type="getEnvTagType(current.env)">{{ current.env }}</el-tag>
             <el-text type="primary">Host: {{ current.sn_host }}</el-text>
         </div>
 
