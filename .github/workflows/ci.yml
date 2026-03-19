@@ -342,9 +342,23 @@ jobs:
             -F prerelease="$PRERELEASE_BOOL" \
             -F make_latest="$MAKE_LATEST_VALUE"
 
-          IS_DRAFT=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')
+          # GitHub release fields may be briefly stale right after PATCH; retry to avoid false negatives.
+          ATTEMPT=0
+          MAX_ATTEMPTS=10
+          IS_DRAFT="true"
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            IS_DRAFT=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft | tostring')
+            if [ "$IS_DRAFT" = "false" ]; then
+              break
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 2
+          done
+
           if [ "$IS_DRAFT" != "false" ]; then
-            echo "Error: release $RELEASE_ID is still draft after publish"
+            echo "Error: release $RELEASE_ID is still draft after publish (attempts=$MAX_ATTEMPTS)"
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '{id, tag_name, draft, prerelease, published_at}'
             exit 1
           fi
 
