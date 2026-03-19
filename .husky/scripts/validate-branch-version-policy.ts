@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import {
+    type AppReleaseChannel,
     assertSupportedAppVersion,
     detectTargetReleaseChannel,
     getExpectedVersionHint,
@@ -7,6 +8,29 @@ import {
     readAppVersion,
     STABLE_APP_VERSION_PATTERN,
 } from "./app-version";
+
+const SUPPORTED_BRANCH_HINT = "Supported branches are main, develop, feature/*, and release/*.";
+
+function fail(message: string): never {
+    console.error(`[hook] branch policy check failed: ${message}`);
+    process.exit(1);
+}
+
+function isVersionAllowedForChannel(version: string, channel: AppReleaseChannel): boolean {
+    if (channel === "stable") {
+        return STABLE_APP_VERSION_PATTERN.test(version);
+    }
+
+    const prereleaseVersion = parsePrereleaseAppVersion(version);
+    return Boolean(prereleaseVersion && prereleaseVersion.channel === channel);
+}
+
+function buildVersionMismatchMessage(branchName: string, currentVersion: string, channel: AppReleaseChannel): string {
+    return (
+        `branch ${branchName} requires ${getExpectedVersionHint(channel)}, ` +
+        `but package.json version is ${currentVersion}.`
+    );
+}
 
 function getCurrentBranch(): string {
     try {
@@ -21,41 +45,27 @@ function getCurrentBranch(): string {
 function main(): void {
     const projectRoot = process.cwd();
     const branchName = getCurrentBranch();
-    const currentVersion = readAppVersion(projectRoot);
 
     if (!branchName || branchName === "HEAD") {
-        console.error("[hook] branch policy check failed: detached HEAD is not supported for versioned commit/push flow.");
-        process.exit(1);
+        fail("detached HEAD is not supported for versioned commit/push flow.");
     }
 
     const targetReleaseChannel = detectTargetReleaseChannel(branchName);
     if (!targetReleaseChannel) {
-        console.error(
-            `[hook] branch policy check failed: unsupported branch "${branchName}". ` +
-            "Supported branches are main, develop, feature/*, and release/*.",
-        );
-        process.exit(1);
+        fail(`unsupported branch "${branchName}". ${SUPPORTED_BRANCH_HINT}`);
     }
 
-    assertSupportedAppVersion(currentVersion, "branch-policy");
+    let currentVersion = "";
+    try {
+        currentVersion = readAppVersion(projectRoot);
+        assertSupportedAppVersion(currentVersion, "branch-policy");
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        fail(message);
+    }
 
-    if (targetReleaseChannel === "stable") {
-        if (!STABLE_APP_VERSION_PATTERN.test(currentVersion)) {
-            console.error(
-                `[hook] branch policy check failed: branch ${branchName} requires ${getExpectedVersionHint(targetReleaseChannel)}, ` +
-                `but package.json version is ${currentVersion}.`,
-            );
-            process.exit(1);
-        }
-    } else {
-        const prereleaseVersion = parsePrereleaseAppVersion(currentVersion);
-        if (!prereleaseVersion || prereleaseVersion.channel !== targetReleaseChannel) {
-            console.error(
-                `[hook] branch policy check failed: branch ${branchName} requires ${getExpectedVersionHint(targetReleaseChannel)}, ` +
-                `but package.json version is ${currentVersion}.`,
-            );
-            process.exit(1);
-        }
+    if (!isVersionAllowedForChannel(currentVersion, targetReleaseChannel)) {
+        fail(buildVersionMismatchMessage(branchName, currentVersion, targetReleaseChannel));
     }
 
     console.log(`[hook] branch policy check passed: ${branchName} -> ${currentVersion}`);
