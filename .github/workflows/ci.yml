@@ -38,6 +38,7 @@ jobs:
       current_version: ${{ steps.version_check.outputs.current_version }}
       release_version: ${{ steps.version_check.outputs.release_version }}
       release_enabled: ${{ steps.version_check.outputs.release_enabled }}
+      validation_status: ${{ steps.version_check.outputs.validation_status }}
       tag_name: ${{ steps.version_check.outputs.tag_name }}
       publish_tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
       publish_tag_prefix: ${{ steps.version_check.outputs.publish_tag_prefix }}
@@ -66,76 +67,46 @@ jobs:
           BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           RELEASE_VERSION="$CURRENT_VERSION"
           SKIP_REASON=""
-          RELEASE_TYPE="release"
-          RELEASE_CHANNEL="stable"
+          RELEASE_TYPE="none"
           TAG_NAME="v$RELEASE_VERSION"
           PUBLISH_TAG_NAME="$TAG_NAME"
           PUBLISH_TAG_PREFIX="v"
           SHORT_SHA="${GITHUB_SHA::7}"
+          SHOULD_TAG="false"
+          OVERWRITE="false"
+          PRERELEASE="false"
+          VALIDATION_STATUS="skipped"
           RELEASE_ENABLED="false"
           POLICY_ERROR=""
-          STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
-          PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
-          PRE_CHANNEL_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
+          set +e
+          VALIDATION_OUTPUT=$(VALIDATION_OUTPUT_FORMAT=github BRANCH_NAME_OVERRIDE="$BRANCH_NAME" APP_VERSION_OVERRIDE="$CURRENT_VERSION" npx --yes tsx .husky/scripts/validate-branch-version-policy.ts 2>&1)
+          VALIDATION_EXIT=$?
+          set -e
 
-          if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_CHANNEL_PATTERN"; then
-            RELEASE_CHANNEL=$(printf '%s' "$CURRENT_VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+-((alpha|beta|rc))\.[0-9]+$/\1/')
-          fi
-
-          EXPECTED_RELEASE_CHANNELS=""
-          EXPECTED_PRIMARY_CHANNEL=""
-          EXPECTED_VERSION_HINT=""
-
-          if [ "$BRANCH_NAME" = "main" ]; then
-            RELEASE_ENABLED="true"
-            EXPECTED_RELEASE_CHANNELS="stable"
-            EXPECTED_VERSION_HINT='x.y.z'
-          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^develop/'; then
-            RELEASE_ENABLED="true"
-            EXPECTED_RELEASE_CHANNELS='alpha beta'
-            EXPECTED_PRIMARY_CHANNEL='beta'
-            EXPECTED_VERSION_HINT='x.y.z-alpha.N or x.y.z-beta.N'
-          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^release/'; then
-            RELEASE_ENABLED="true"
-            EXPECTED_RELEASE_CHANNELS="rc"
-            EXPECTED_PRIMARY_CHANNEL="rc"
-            EXPECTED_VERSION_HINT='x.y.z-rc.N'
-          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^feature/'; then
-            RELEASE_ENABLED="true"
-            EXPECTED_RELEASE_CHANNELS='alpha beta'
-            EXPECTED_PRIMARY_CHANNEL='alpha'
-            EXPECTED_VERSION_HINT='x.y.z-alpha.N or x.y.z-beta.N'
-          fi
-
-          if ! printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN|$PRE_PATTERN"; then
-            PRERELEASE="false"
-            SHOULD_TAG="false"
-            POLICY_ERROR="版本格式非法：$CURRENT_VERSION。仅支持 x.y.z、x.y.z-alpha.N、x.y.z-beta.N、x.y.z-rc.N。"
-          elif [ "$EXPECTED_RELEASE_CHANNELS" = "stable" ]; then
-            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN"; then
-              PRERELEASE="false"
-              RELEASE_TYPE="release"
-            else
-              PRERELEASE="false"
-              SHOULD_TAG="false"
-              POLICY_ERROR="branch requires expected version pattern but got current version: branch=$BRANCH_NAME expected=x.y.z actual=$CURRENT_VERSION"
-            fi
-          elif [ -n "$EXPECTED_RELEASE_CHANNELS" ]; then
-            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN" && printf '%s' " $EXPECTED_RELEASE_CHANNELS " | grep -Fq " $RELEASE_CHANNEL "; then
-              PRERELEASE="true"
-              RELEASE_TYPE="prerelease"
-            else
-              PRERELEASE="false"
-              SHOULD_TAG="false"
-              POLICY_ERROR="branch requires expected version pattern but got current version: branch=$BRANCH_NAME expected=$EXPECTED_VERSION_HINT actual=$CURRENT_VERSION"
-            fi
+          if [ "$VALIDATION_EXIT" -ne 0 ]; then
+            VALIDATION_STATUS="failed"
+            POLICY_ERROR="$VALIDATION_OUTPUT"
           else
-            PRERELEASE="false"
-            SHOULD_TAG="false"
-            SKIP_REASON="当前分支 $BRANCH_NAME 不参与 CI 发布。"
+            VALIDATION_STATUS=$(printf '%s\n' "$VALIDATION_OUTPUT" | sed -n 's/^validation_status=//p' | tail -n 1)
+            RELEASE_ENABLED=$(printf '%s\n' "$VALIDATION_OUTPUT" | sed -n 's/^release_enabled=//p' | tail -n 1)
+            PRERELEASE=$(printf '%s\n' "$VALIDATION_OUTPUT" | sed -n 's/^prerelease=//p' | tail -n 1)
+            RELEASE_TYPE=$(printf '%s\n' "$VALIDATION_OUTPUT" | sed -n 's/^release_type=//p' | tail -n 1)
+
+            [ -z "$VALIDATION_STATUS" ] && VALIDATION_STATUS="failed"
+            [ -z "$RELEASE_ENABLED" ] && RELEASE_ENABLED="false"
+            [ -z "$PRERELEASE" ] && PRERELEASE="false"
+            [ -z "$RELEASE_TYPE" ] && RELEASE_TYPE="none"
+
+            if [ "$VALIDATION_STATUS" = "failed" ]; then
+              POLICY_ERROR="$VALIDATION_OUTPUT"
+            elif [ "$VALIDATION_STATUS" = "skipped" ]; then
+              SKIP_REASON="当前分支 $BRANCH_NAME 不参与 CI 发布。"
+            elif [ "$RELEASE_ENABLED" = "true" ]; then
+              SHOULD_TAG="true"
+            fi
           fi
 
-          if [ -z "$POLICY_ERROR" ] && [ "$RELEASE_ENABLED" = "true" ]; then
+          if [ -z "$POLICY_ERROR" ] && [ "$RELEASE_ENABLED" = "true" ] && [ "$VALIDATION_STATUS" = "passed" ]; then
             git fetch --tags
             TAG_EXISTS=false
             RELEASE_EXISTS=false
@@ -152,12 +123,13 @@ jobs:
             fi
           fi
 
-          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION release_type=${RELEASE_TYPE:-unknown} release_channel=${RELEASE_CHANNEL:-unknown} prerelease=${PRERELEASE:-unknown} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
+          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION validation_status=${VALIDATION_STATUS:-unknown} release_enabled=${RELEASE_ENABLED:-false} release_type=${RELEASE_TYPE:-none} prerelease=${PRERELEASE:-false} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
 
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_enabled=$RELEASE_ENABLED" >> "$GITHUB_OUTPUT"
+          echo "validation_status=$VALIDATION_STATUS" >> "$GITHUB_OUTPUT"
           echo "should_tag=$SHOULD_TAG" >> "$GITHUB_OUTPUT"
           echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
           echo "policy_error=$POLICY_ERROR" >> "$GITHUB_OUTPUT"
@@ -181,8 +153,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          if git rev-parse "$PUBLISH_TAG_NAME" >/dev/null 2>&1; then
+            EXISTING_SHA="$(git rev-list -n 1 "$PUBLISH_TAG_NAME")"
+            if [ "$EXISTING_SHA" = "$GITHUB_SHA" ]; then
+              echo "[信息] Tag 已存在且指向当前提交，复用现有 tag：$PUBLISH_TAG_NAME"
+              echo "created=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "[信息] Tag 已存在但指向不同提交，将更新 tag：$PUBLISH_TAG_NAME $EXISTING_SHA -> $GITHUB_SHA"
+            git tag -f "$PUBLISH_TAG_NAME" "$GITHUB_SHA"
+            git push --force origin "refs/tags/$PUBLISH_TAG_NAME"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           git tag "$PUBLISH_TAG_NAME" "$GITHUB_SHA"
-          git push origin "$PUBLISH_TAG_NAME"
+          git push origin "refs/tags/$PUBLISH_TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
 
       - name: Fail when version does not match branch policy
@@ -226,6 +213,7 @@ jobs:
           echo "publish_tag_name=${{ steps.version_check.outputs.publish_tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "publish_tag_prefix=${{ steps.version_check.outputs.publish_tag_prefix }}" >> "$GITHUB_STEP_SUMMARY"
           echo "release_enabled=${{ steps.version_check.outputs.release_enabled }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "validation_status=${{ steps.version_check.outputs.validation_status }}" >> "$GITHUB_STEP_SUMMARY"
           echo "should_tag=${{ steps.version_check.outputs.should_tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "overwrite=${{ steps.version_check.outputs.overwrite }}" >> "$GITHUB_STEP_SUMMARY"
           echo "prerelease=${{ steps.version_check.outputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
