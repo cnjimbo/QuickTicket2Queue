@@ -1,2 +1,2 @@
 #!/bin/sh
-pnpm exec tsx scripts/auto-bump-version-by-branch.ts "$@"
+pnpm exec tsx "$(dirname "$0")/auto-bump-version-by-branch.ts" "$@"

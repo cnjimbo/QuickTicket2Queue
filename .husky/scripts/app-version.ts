@@ -39,6 +39,39 @@ export function formatPrereleaseAppVersion(
     return `${major}.${minor}.${patch}-${channel}.${sequence}`;
 }
 
+export function detectTargetReleaseChannel(branchName: string): AppReleaseChannel | null {
+    if (branchName === "main") {
+        return "stable";
+    }
+
+    if (branchName === "develop") {
+        return "beta";
+    }
+
+    if (branchName.startsWith("release/")) {
+        return "rc";
+    }
+
+    if (branchName.startsWith("feature/")) {
+        return "alpha";
+    }
+
+    return null;
+}
+
+export function getExpectedVersionHint(channel: AppReleaseChannel): string {
+    switch (channel) {
+        case "stable":
+            return "x.y.z";
+        case "alpha":
+            return "x.y.z-alpha.N";
+        case "beta":
+            return "x.y.z-beta.N";
+        case "rc":
+            return "x.y.z-rc.N";
+    }
+}
+
 export function readAppVersion(projectRoot = process.cwd()): string {
     const packageJsonPath = join(projectRoot, "package.json");
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {

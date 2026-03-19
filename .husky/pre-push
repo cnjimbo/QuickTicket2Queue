@@ -1,2 +1,3 @@
 #!/bin/sh
 "$(dirname "$0")/scripts/sync-app-version.sh" --stage --fail-if-updated
+"$(dirname "$0")/scripts/validate-branch-version-policy.sh"

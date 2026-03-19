@@ -114,14 +114,9 @@ jobs:
               SKIP_REASON="$BRANCH_NAME 分支必须使用 $EXPECTED_RELEASE_CHANNEL 阶段版本号，格式为 \`$EXPECTED_VERSION_HINT\`。"
             fi
           else
-            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
-              PRERELEASE="true"
-              RELEASE_TYPE="prerelease"
-            else
-              PRERELEASE="false"
-              SHOULD_TAG="false"
-              SKIP_REASON="未识别分支仅允许发布 prerelease，版本号必须为 `x.y.z-alpha.N`、`x.y.z-beta.N` 或 `x.y.z-rc.N`。"
-            fi
+            PRERELEASE="false"
+            SHOULD_TAG="false"
+            SKIP_REASON="不支持的分支前缀：$BRANCH_NAME。仅允许 main、develop、feature/*、release/*。"
           fi
 
           if [ -z "$SKIP_REASON" ]; then

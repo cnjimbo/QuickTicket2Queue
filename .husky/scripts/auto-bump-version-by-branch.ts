@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 import {
     assertSupportedAppVersion,
+    detectTargetReleaseChannel,
     formatPrereleaseAppVersion,
-    type AppReleaseChannel,
     parsePrereleaseAppVersion,
     readAppVersion,
     STABLE_APP_VERSION_PATTERN,
@@ -33,27 +33,7 @@ function bumpStablePatch(version: string): string {
     return `${major}.${minor}.${patch + 1}`;
 }
 
-function detectTargetReleaseChannel(branchName: string): AppReleaseChannel | null {
-    if (branchName === "main") {
-        return "stable";
-    }
-
-    if (branchName === "develop") {
-        return "beta";
-    }
-
-    if (branchName.startsWith("release/")) {
-        return "rc";
-    }
-
-    if (branchName.startsWith("feature/")) {
-        return "alpha";
-    }
-
-    return null;
-}
-
-function toTargetPrerelease(version: string, channel: Exclude<AppReleaseChannel, "stable">): string {
+function toTargetPrerelease(version: string, channel: "alpha" | "beta" | "rc"): string {
     const prereleaseVersion = parsePrereleaseAppVersion(version);
     if (prereleaseVersion) {
         if (prereleaseVersion.channel === channel) {
