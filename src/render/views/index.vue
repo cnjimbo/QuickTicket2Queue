@@ -1,6 +1,6 @@
 <route lang="json">
 {
-  "redirect": "/ticket/ticket"
+  "redirect": "/ticket/external"
 }
 </route>
 

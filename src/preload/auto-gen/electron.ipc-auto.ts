@@ -9,20 +9,34 @@ type PreloadInvokeReturn<T extends IpcChannel, TAsync extends boolean> =
 export const ipcInvoke = {
   addTicketOption: (...args: IpcInvokeArgs<'add-ticket-option'>): PreloadInvokeReturn<'add-ticket-option', true> =>
     ipcRenderer.invoke('add-ticket-option', ...args) as unknown as PreloadInvokeReturn<'add-ticket-option', true>,
+  checkForAppUpdates: (...args: IpcInvokeArgs<'check-for-app-updates'>): PreloadInvokeReturn<'check-for-app-updates', true> =>
+    ipcRenderer.invoke('check-for-app-updates', ...args) as unknown as PreloadInvokeReturn<'check-for-app-updates', true>,
   clearTicketHistory: (...args: IpcInvokeArgs<'clear-ticket-history'>): PreloadInvokeReturn<'clear-ticket-history', true> =>
     ipcRenderer.invoke('clear-ticket-history', ...args) as unknown as PreloadInvokeReturn<'clear-ticket-history', true>,
   clearCredential: (...args: IpcInvokeArgs<'clearCredential'>): PreloadInvokeReturn<'clearCredential', true> =>
     ipcRenderer.invoke('clearCredential', ...args) as unknown as PreloadInvokeReturn<'clearCredential', true>,
   deleteTicketOption: (...args: IpcInvokeArgs<'delete-ticket-option'>): PreloadInvokeReturn<'delete-ticket-option', true> =>
     ipcRenderer.invoke('delete-ticket-option', ...args) as unknown as PreloadInvokeReturn<'delete-ticket-option', true>,
+  downloadAppUpdate: (...args: IpcInvokeArgs<'download-app-update'>): PreloadInvokeReturn<'download-app-update', true> =>
+    ipcRenderer.invoke('download-app-update', ...args) as unknown as PreloadInvokeReturn<'download-app-update', true>,
+  getAppVersion: (...args: IpcInvokeArgs<'get-app-version'>): PreloadInvokeReturn<'get-app-version', true> =>
+    ipcRenderer.invoke('get-app-version', ...args) as unknown as PreloadInvokeReturn<'get-app-version', true>,
   getDomainUser: (...args: IpcInvokeArgs<'get-domain-user'>): PreloadInvokeReturn<'get-domain-user', true> =>
     ipcRenderer.invoke('get-domain-user', ...args) as unknown as PreloadInvokeReturn<'get-domain-user', true>,
   getTicketHistory: (...args: IpcInvokeArgs<'get-ticket-history'>): PreloadInvokeReturn<'get-ticket-history', true> =>
     ipcRenderer.invoke('get-ticket-history', ...args) as unknown as PreloadInvokeReturn<'get-ticket-history', true>,
   getTicketOptions: (...args: IpcInvokeArgs<'get-ticket-options'>): PreloadInvokeReturn<'get-ticket-options', true> =>
     ipcRenderer.invoke('get-ticket-options', ...args) as unknown as PreloadInvokeReturn<'get-ticket-options', true>,
+  getUpdatePreferences: (...args: IpcInvokeArgs<'get-update-preferences'>): PreloadInvokeReturn<'get-update-preferences', true> =>
+    ipcRenderer.invoke('get-update-preferences', ...args) as unknown as PreloadInvokeReturn<'get-update-preferences', true>,
   getCurrent: (...args: IpcInvokeArgs<'getCurrent'>): PreloadInvokeReturn<'getCurrent', true> =>
     ipcRenderer.invoke('getCurrent', ...args) as unknown as PreloadInvokeReturn<'getCurrent', true>,
+  installDownloadedAppUpdate: (...args: IpcInvokeArgs<'install-downloaded-app-update'>): PreloadInvokeReturn<'install-downloaded-app-update', true> =>
+    ipcRenderer.invoke('install-downloaded-app-update', ...args) as unknown as PreloadInvokeReturn<'install-downloaded-app-update', true>,
+  internalTicket: (...args: IpcInvokeArgs<'internal-ticket'>): PreloadInvokeReturn<'internal-ticket', true> =>
+    ipcRenderer.invoke('internal-ticket', ...args) as unknown as PreloadInvokeReturn<'internal-ticket', true>,
+  isDomainEnvironment: (...args: IpcInvokeArgs<'is-domain-environment'>): PreloadInvokeReturn<'is-domain-environment', true> =>
+    ipcRenderer.invoke('is-domain-environment', ...args) as unknown as PreloadInvokeReturn<'is-domain-environment', true>,
   openLink: (...args: IpcInvokeArgs<'open-link'>): PreloadInvokeReturn<'open-link', true> =>
     ipcRenderer.invoke('open-link', ...args) as unknown as PreloadInvokeReturn<'open-link', true>,
   readCredential: (...args: IpcInvokeArgs<'readCredential'>): PreloadInvokeReturn<'readCredential', true> =>
@@ -33,6 +47,8 @@ export const ipcInvoke = {
     ipcRenderer.invoke('save-ticket-history', ...args) as unknown as PreloadInvokeReturn<'save-ticket-history', true>,
   saveCredential: (...args: IpcInvokeArgs<'saveCredential'>): PreloadInvokeReturn<'saveCredential', true> =>
     ipcRenderer.invoke('saveCredential', ...args) as unknown as PreloadInvokeReturn<'saveCredential', true>,
+  setUpdatePreferences: (...args: IpcInvokeArgs<'set-update-preferences'>): PreloadInvokeReturn<'set-update-preferences', true> =>
+    ipcRenderer.invoke('set-update-preferences', ...args) as unknown as PreloadInvokeReturn<'set-update-preferences', true>,
   syncTicketOptionsFromGithub: (...args: IpcInvokeArgs<'sync-ticket-options-from-github'>): PreloadInvokeReturn<'sync-ticket-options-from-github', true> =>
     ipcRenderer.invoke('sync-ticket-options-from-github', ...args) as unknown as PreloadInvokeReturn<'sync-ticket-options-from-github', true>,
   ticket: (...args: IpcInvokeArgs<'ticket'>): PreloadInvokeReturn<'ticket', true> =>

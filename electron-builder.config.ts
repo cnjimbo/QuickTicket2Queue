@@ -1,5 +1,5 @@
 import type { Configuration } from "electron-builder";
-import { assertSupportedAppVersion, readAppVersion } from "./scripts/app-version";
+import { assertSupportedAppVersion, readAppVersion } from "./.husky/scripts/app-version";
 
 const APP_VERSION = readAppVersion(__dirname);
 const isReleaseBuild = process.env.ELECTRON_BUILDER_RELEASE_BUILD === "true";

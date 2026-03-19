@@ -65,6 +65,11 @@ export const useTicketStore = defineStore("ticket", () => {
     undefined as TicketResponse | undefined,
     { immediate: false, resetOnExecute: false },
   );
+  const { execute: executeSubmitInternalTicket, isLoading: isSubmittingInternalTicket } = useAsyncState(
+    (payload: TicketType) => window.electron.internalTicket(payload),
+    undefined as TicketResponse | undefined,
+    { immediate: false, resetOnExecute: false },
+  );
 
   const isFormValid = computed(() =>
     requiredFields.every((field) => (ticket[field] ?? "").trim().length > 0),
@@ -187,11 +192,34 @@ export const useTicketStore = defineStore("ticket", () => {
     return undefined;
   };
 
+  const submitInternalTicket = async () => {
+    const validationError = validateTicket();
+    if (validationError) {
+      return validationError;
+    }
+
+    try {
+      setResult();
+      const payload = toRaw(ticket);
+      saveTicketDraft();
+
+      const res = await executeSubmitInternalTicket(0, payload);
+      setResult(res);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "通过网页登录态提交失败，请稍后重试";
+      return message;
+    }
+
+    return undefined;
+  };
+
   return {
     ticket,
     validationMessages,
     result,
     isSubmitting,
+    isSubmittingInternalTicket,
     isFormValid,
     hasUnsavedDraftChanges,
     setTicketField,
@@ -207,5 +235,6 @@ export const useTicketStore = defineStore("ticket", () => {
     validateTicket,
     setResult,
     submitTicket,
+    submitInternalTicket,
   };
 });

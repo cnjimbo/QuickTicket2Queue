@@ -1,18 +1,38 @@
 {
-    "task.allowAutomaticTasks": "on",
+    "task.allowAutomaticTasks": "off",
+    "npm.autoDetect": "off",
+    "js/ts.tsserver.automaticTypeAcquisition.enabled": false,
+    "js/ts.tsserver.experimental.enableProjectDiagnostics": false,
+    "js/ts.suggest.autoImports": false,
+    "files.watcherExclude": {
+        "**/.git/**": true,
+        "**/node_modules/**": true,
+        "**/dist/**": true,
+        "**/build/**": true,
+        "**/.turbo/**": true,
+        "**/.pnpm-store/**": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/.pnpm-store": true
+    },
     "terminal.integrated.defaultProfile.windows": "PowerShell UTF-8",
     "terminal.integrated.profiles.windows": {
         "PowerShell UTF-8": {
             "source": "PowerShell",
             "args": [
-                "-NoExit",
-                "-Command",
-                "chcp 65001 > $null; [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false)"
+                "-NoLogo"
             ]
         }
     },
     "terminal.integrated.fontFamily": "Cascadia Mono, Segoe UI Emoji",
     "terminal.integrated.unicodeVersion": "11",
+    "eslint.run": "onSave",
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
     "eslint.validate": [
         "javascript",
         "javascriptreact",

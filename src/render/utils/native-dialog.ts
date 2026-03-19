@@ -28,7 +28,7 @@ export async function showNativeDialog(options: NativeDialogOptions): Promise<nu
         -1,
         { immediate: false, resetOnExecute: false },
     )
-    const response = await execute(0)
+    const response = await execute(0) ?? -1
     await normalizeWindowFocusAfterDialog()
     return response
 }

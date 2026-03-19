@@ -32,6 +32,11 @@ export class AppControllerTicket {
     return this.osservice.getUserName();
   }
 
+  @IpcHandle("is-domain-environment")
+  public async isDomainEnvironment(): Promise<boolean> {
+    return this.osservice.isDomainEnvironment();
+  }
+
   @IpcHandle("get-ticket-history")
   public async getTicketHistory(): Promise<TicketHistoryItem[]> {
     return await this.store.getTicketHistory();

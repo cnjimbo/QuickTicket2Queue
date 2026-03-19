@@ -50,7 +50,7 @@ export const useCredentialStore = defineStore('credential', {
                 [] as CredentialItem[],
                 { immediate: false, resetOnExecute: false },
             )
-            const state = await execute(0)
+            const state = await execute(0) ?? []
             this.setTableData(state)
         },
         async clearCredential() {

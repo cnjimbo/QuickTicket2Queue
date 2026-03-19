@@ -4,10 +4,6 @@ on:
   push:
   pull_request:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
@@ -15,20 +11,39 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  detect_package_version:
+    runs-on: ubuntu-latest
+    outputs:
+      current_version: ${{ steps.read_version.outputs.current_version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Read package version
+        id: read_version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
   auto_tag_release:
+    needs: detect_package_version
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-auto_tag_release
+      cancel-in-progress: true
     permissions:
       contents: write
     outputs:
       branch_name: ${{ steps.version_check.outputs.branch_name }}
       current_version: ${{ steps.version_check.outputs.current_version }}
       release_version: ${{ steps.version_check.outputs.release_version }}
+      release_enabled: ${{ steps.version_check.outputs.release_enabled }}
       tag_name: ${{ steps.version_check.outputs.tag_name }}
       publish_tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
       publish_tag_prefix: ${{ steps.version_check.outputs.publish_tag_prefix }}
       should_tag: ${{ steps.version_check.outputs.should_tag }}
       skip_reason: ${{ steps.version_check.outputs.skip_reason }}
+      policy_error: ${{ steps.version_check.outputs.policy_error }}
       prerelease: ${{ steps.version_check.outputs.prerelease }}
       release_type: ${{ steps.version_check.outputs.release_type }}
       overwrite: ${{ steps.version_check.outputs.overwrite }}
@@ -44,45 +59,83 @@ jobs:
         id: version_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_VERSION: ${{ needs.detect_package_version.outputs.current_version }}
         run: |
           echo "[信息] 正在根据 package.json 版本号和当前分支判断发布策略"
 
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
           BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           RELEASE_VERSION="$CURRENT_VERSION"
           SKIP_REASON=""
           RELEASE_TYPE="release"
+          RELEASE_CHANNEL="stable"
           TAG_NAME="v$RELEASE_VERSION"
           PUBLISH_TAG_NAME="$TAG_NAME"
           PUBLISH_TAG_PREFIX="v"
           SHORT_SHA="${GITHUB_SHA::7}"
+          RELEASE_ENABLED="false"
+          POLICY_ERROR=""
           STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
-          PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$'
+          PRE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
+          PRE_CHANNEL_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'
+
+          if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_CHANNEL_PATTERN"; then
+            RELEASE_CHANNEL=$(printf '%s' "$CURRENT_VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+-((alpha|beta|rc))\.[0-9]+$/\1/')
+          fi
+
+          EXPECTED_RELEASE_CHANNELS=""
+          EXPECTED_PRIMARY_CHANNEL=""
+          EXPECTED_VERSION_HINT=""
 
           if [ "$BRANCH_NAME" = "main" ]; then
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS="stable"
+            EXPECTED_VERSION_HINT='x.y.z'
+          elif [ "$BRANCH_NAME" = "develop" ]; then
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS='alpha beta'
+            EXPECTED_PRIMARY_CHANNEL='beta'
+            EXPECTED_VERSION_HINT='x.y.z-alpha.N or x.y.z-beta.N'
+          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^release/'; then
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS="rc"
+            EXPECTED_PRIMARY_CHANNEL="rc"
+            EXPECTED_VERSION_HINT='x.y.z-rc.N'
+          elif printf '%s' "$BRANCH_NAME" | grep -Eq '^feature/'; then
+            RELEASE_ENABLED="true"
+            EXPECTED_RELEASE_CHANNELS='alpha beta'
+            EXPECTED_PRIMARY_CHANNEL='alpha'
+            EXPECTED_VERSION_HINT='x.y.z-alpha.N or x.y.z-beta.N'
+          fi
+
+          if ! printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN|$PRE_PATTERN"; then
+            PRERELEASE="false"
+            SHOULD_TAG="false"
+            POLICY_ERROR="版本格式非法：$CURRENT_VERSION。仅支持 x.y.z、x.y.z-alpha.N、x.y.z-beta.N、x.y.z-rc.N。"
+          elif [ "$EXPECTED_RELEASE_CHANNELS" = "stable" ]; then
             if printf '%s' "$CURRENT_VERSION" | grep -Eq "$STABLE_PATTERN"; then
               PRERELEASE="false"
               RELEASE_TYPE="release"
-            elif printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
+            else
+              PRERELEASE="false"
+              SHOULD_TAG="false"
+              POLICY_ERROR="branch requires expected version pattern but got current version: branch=$BRANCH_NAME expected=x.y.z actual=$CURRENT_VERSION"
+            fi
+          elif [ -n "$EXPECTED_RELEASE_CHANNELS" ]; then
+            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN" && printf '%s' " $EXPECTED_RELEASE_CHANNELS " | grep -Fq " $RELEASE_CHANNEL "; then
               PRERELEASE="true"
               RELEASE_TYPE="prerelease"
             else
               PRERELEASE="false"
               SHOULD_TAG="false"
-              SKIP_REASON="main 分支版本号不符合发布规则。仅接受 `x.y.z`、`x.y.z-alpha.N`、`x.y.z-beta.N` 三种格式。"
+              POLICY_ERROR="branch requires expected version pattern but got current version: branch=$BRANCH_NAME expected=$EXPECTED_VERSION_HINT actual=$CURRENT_VERSION"
             fi
           else
-            if printf '%s' "$CURRENT_VERSION" | grep -Eq "$PRE_PATTERN"; then
-              PRERELEASE="true"
-              RELEASE_TYPE="prerelease"
-            else
-              PRERELEASE="false"
-              SHOULD_TAG="false"
-              SKIP_REASON="非 main 分支仅允许发布 prerelease，版本号必须为 `x.y.z-alpha.N` 或 `x.y.z-beta.N`。"
-            fi
+            PRERELEASE="false"
+            SHOULD_TAG="false"
+            SKIP_REASON="当前分支 $BRANCH_NAME 不参与 CI 发布。"
           fi
 
-          if [ -z "$SKIP_REASON" ]; then
+          if [ -z "$POLICY_ERROR" ] && [ "$RELEASE_ENABLED" = "true" ]; then
             git fetch --tags
             TAG_EXISTS=false
             RELEASE_EXISTS=false
@@ -99,13 +152,15 @@ jobs:
             fi
           fi
 
-          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION release_type=${RELEASE_TYPE:-unknown} prerelease=${PRERELEASE:-unknown} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
+          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION release_type=${RELEASE_TYPE:-unknown} release_channel=${RELEASE_CHANNEL:-unknown} prerelease=${PRERELEASE:-unknown} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
 
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_enabled=$RELEASE_ENABLED" >> "$GITHUB_OUTPUT"
           echo "should_tag=$SHOULD_TAG" >> "$GITHUB_OUTPUT"
           echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
+          echo "policy_error=$POLICY_ERROR" >> "$GITHUB_OUTPUT"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "publish_tag_name=$PUBLISH_TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "publish_tag_prefix=$PUBLISH_TAG_PREFIX" >> "$GITHUB_OUTPUT"
@@ -129,6 +184,16 @@ jobs:
           git tag "$PUBLISH_TAG_NAME" "$GITHUB_SHA"
           git push origin "$PUBLISH_TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Fail when version does not match branch policy
+        if: steps.version_check.outputs.policy_error != ''
+        run: |
+          echo "::error::版本校验失败：${{ steps.version_check.outputs.policy_error }}"
+          echo "branch_name=${{ steps.version_check.outputs.branch_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "current_version=${{ steps.version_check.outputs.current_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "status=failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "reason=${{ steps.version_check.outputs.policy_error }}" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Create GitHub draft release
         id: create_release
@@ -160,19 +225,26 @@ jobs:
           echo "tag_name=${{ steps.version_check.outputs.tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "publish_tag_name=${{ steps.version_check.outputs.publish_tag_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "publish_tag_prefix=${{ steps.version_check.outputs.publish_tag_prefix }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "release_enabled=${{ steps.version_check.outputs.release_enabled }}" >> "$GITHUB_STEP_SUMMARY"
           echo "should_tag=${{ steps.version_check.outputs.should_tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "overwrite=${{ steps.version_check.outputs.overwrite }}" >> "$GITHUB_STEP_SUMMARY"
           echo "prerelease=${{ steps.version_check.outputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
           echo "release_type=${{ steps.version_check.outputs.release_type }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.version_check.outputs.policy_error }}" ]; then
+            echo "policy_error=${{ steps.version_check.outputs.policy_error }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -n "${{ steps.version_check.outputs.skip_reason }}" ]; then
             echo "skip_reason=${{ steps.version_check.outputs.skip_reason }}" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   release:
-    needs: auto_tag_release
+    needs: [detect_package_version, auto_tag_release]
     runs-on: ${{ matrix.os }}
     if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
     timeout-minutes: 90
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-release-${{ matrix.os }}
+      cancel-in-progress: true
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -233,9 +305,12 @@ jobs:
           gh release upload $env:PUBLISH_TAG_NAME @files --clobber
 
   finalize_release:
-    needs: [auto_tag_release, release]
+    needs: [detect_package_version, auto_tag_release, release]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && needs.auto_tag_release.outputs.released == 'true'
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-finalize_release
+      cancel-in-progress: true
     permissions:
       contents: write
     outputs:
@@ -289,9 +364,23 @@ jobs:
             -F prerelease="$PRERELEASE_BOOL" \
             -F make_latest="$MAKE_LATEST_VALUE"
 
-          IS_DRAFT=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')
+          # GitHub release fields may be briefly stale right after PATCH; retry to avoid false negatives.
+          ATTEMPT=0
+          MAX_ATTEMPTS=10
+          IS_DRAFT="true"
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            IS_DRAFT=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft | tostring')
+            if [ "$IS_DRAFT" = "false" ]; then
+              break
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 2
+          done
+
           if [ "$IS_DRAFT" != "false" ]; then
-            echo "Error: release $RELEASE_ID is still draft after publish"
+            echo "Error: release $RELEASE_ID is still draft after publish (attempts=$MAX_ATTEMPTS)"
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '{id, tag_name, draft, prerelease, published_at}'
             exit 1
           fi
 
@@ -311,9 +400,12 @@ jobs:
           fi
 
   cleanup_on_failure_or_cancel:
-    needs: [auto_tag_release, release, finalize_release]
+    needs: [detect_package_version, auto_tag_release, release, finalize_release]
     runs-on: ubuntu-latest
     if: always() && github.event_name == 'push' && needs.auto_tag_release.outputs.publish_tag_name != '' && (needs.auto_tag_release.result != 'success' || needs.release.result != 'success' || needs.finalize_release.result != 'success')
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-cleanup_on_failure_or_cancel
+      cancel-in-progress: true
     permissions:
       contents: write
     steps:

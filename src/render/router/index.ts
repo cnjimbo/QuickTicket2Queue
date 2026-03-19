@@ -1,9 +1,11 @@
 import { createWebHashHistory } from "vue-router";
 // import { experimental_createRouter as createRouter } from 'vue-router/experimental'
 // import { resolver, handleHotUpdate } from 'vue-router/auto-resolver'
+
 import { createRouter } from "vue-router";
 import { routes, handleHotUpdate } from "vue-router/auto-routes";
 import type { RouteRecordRaw } from "vue-router";
+import { resolveDefaultTicketPath } from "@render/utils/default-ticket-path";
 
 const safeRoutes = routes.filter(
   (route): route is RouteRecordRaw =>
@@ -16,9 +18,11 @@ export const router = createRouter({
   routes: safeRoutes,
 });
 
-router.beforeEach((to) => {
-  if (to.path === "/" || to.matched.length === 0) {
-    return { path: "/ticket/ticket", query: to.query };
+router.beforeEach(async (to) => {
+  const isRootOrUnmatched = to.path === "/" || to.matched.length === 0;
+
+  if (isRootOrUnmatched) {
+    return { path: await resolveDefaultTicketPath(), query: to.query };
   }
 
   return true;

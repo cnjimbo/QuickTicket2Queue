@@ -2,7 +2,7 @@ import { join } from "node:path";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 import { VitePluginDoubleshot } from "vite-plugin-doubleshot";
-import { assertSupportedAppVersion, readAppVersion } from "./scripts/app-version";
+import { assertSupportedAppVersion, readAppVersion } from "./.husky/scripts/app-version";
 
 import VueRouter from "vue-router/vite";
 import { VueRouterAutoImports } from "vue-router/unplugin";

@@ -6,8 +6,12 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AppControllerCredential } from "./app.controller.credential";
+import { AppControllerInternalTicket } from "./app.controller.internal-ticket";
 import { AppControllerTicket } from "./app.controller.ticket";
+import { AppControllerUpdate } from "./app.controller.update";
+import { AppServiceInternalTicket } from "./app.service.internal-ticket";
 import { AppServiceTicket } from "./app.service.ticket";
+import { AppServiceUpdate } from "./app.service.update";
 import { AppServiceOS } from "./app.service.os";
 import { AppServiceStore } from "./app.service.store";
 import { AppServiceCredential } from "./app.service.credential";
@@ -162,7 +166,7 @@ const SHOW_NATIVE_DIALOG_CHANNEL = "show-native-dialog";
       },
     }),
   ],
-  controllers: [AppController, AppControllerCredential, AppControllerTicket],
-  providers: [AppService, AppServiceOS, AppServiceHttp, AppServiceTicket, AppServiceCredential, AppServiceTicketHistory, AppServiceTicketOptions, AppServiceStore],
+  controllers: [AppController, AppControllerCredential, AppControllerTicket, AppControllerInternalTicket, AppControllerUpdate],
+  providers: [AppService, AppServiceOS, AppServiceHttp, AppServiceTicket, AppServiceInternalTicket, AppServiceUpdate, AppServiceCredential, AppServiceTicketHistory, AppServiceTicketOptions, AppServiceStore],
 })
 export class AppModule { }

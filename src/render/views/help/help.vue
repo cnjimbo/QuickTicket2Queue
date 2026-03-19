@@ -62,6 +62,47 @@ const features = [
       '内置常用 queue 列表，支持新增自定义队列与描述映射，支持删除单条记录，并可随时一键恢复默认列表。',
   },
 ]
+
+const ticketSubmissionModes = [
+  {
+    title: '内网提单（网页登录态）',
+    tag: '推荐',
+    tagType: 'success' as const,
+    scene: '适用于可通过浏览器登录 ServiceNow 并使用会话态提交的场景，作为默认首选方式。',
+    preconditions: [
+      '当前环境至少配置 sn_host。',
+      '可正常打开并登录对应 ServiceNow 页面。',
+      '登录态仍在有效期内。',
+    ],
+    steps: [
+      '进入内网工单页，填写标题、内容、队列。',
+      '点击“网页登录并提交”，按提示完成登录。',
+      '提交成功后点击结果链接查看工单。',
+    ],
+  },
+  {
+    title: '外网提单（OAuth API）',
+    tag: '备选',
+    tagType: 'warning' as const,
+    scene: '适用于已配置 client_id / client_secret，且可直连目标 ServiceNow 接口的自动化提交流程。',
+    preconditions: [
+      '当前环境已配置 client_id、client_secret、sn_host。',
+      '目标环境 OAuth token 接口可访问。',
+      '当前账号有对应队列提单权限。',
+    ],
+    steps: [
+      '进入外网工单页，填写标题、内容、队列。',
+      '点击“提交工单”，系统通过 API 直接创建。',
+      '提交成功后点击结果链接查看工单。',
+    ],
+  },
+]
+
+const ticketSubmissionTips = [
+  '优先使用内网提单（网页登录态），作为默认提交路径。',
+  '若内网提单失败，先检查 host 配置和登录态，再尝试重新登录。',
+  '需要批量或自动化处理时，可切换外网提单（OAuth API）。',
+]
 </script>
 
 <template>
@@ -99,6 +140,39 @@ const features = [
       <h3 class="feature-title">{{ feature.title }}</h3>
       <p class="feature-desc">{{ feature.description }}</p>
     </el-card>
+  </div>
+
+  <el-divider />
+
+  <div class="submission-section">
+    <h3>内网 / 外网提单说明</h3>
+    <p class="submission-subtitle">默认优先内网提单，按网络与凭据状态选择合适的提交流程</p>
+    <div class="submission-grid">
+      <el-card v-for="mode in ticketSubmissionModes" :key="mode.title" class="submission-card" shadow="never">
+        <div class="submission-head">
+          <h4 class="submission-title">{{ mode.title }}</h4>
+          <el-tag :type="mode.tagType" size="small">{{ mode.tag }}</el-tag>
+        </div>
+        <p class="submission-scene">{{ mode.scene }}</p>
+        <p class="submission-label">前置条件</p>
+        <ul class="submission-list">
+          <li v-for="item in mode.preconditions" :key="`${mode.title}-pre-${item}`">{{ item }}</li>
+        </ul>
+        <p class="submission-label">操作步骤</p>
+        <ol class="submission-list submission-list--ordered">
+          <li v-for="item in mode.steps" :key="`${mode.title}-step-${item}`">{{ item }}</li>
+        </ol>
+      </el-card>
+    </div>
+
+    <el-alert class="submission-tip" type="info" show-icon :closable="false">
+      <template #title>选择建议</template>
+      <template #default>
+        <ul class="submission-list">
+          <li v-for="tip in ticketSubmissionTips" :key="tip">{{ tip }}</li>
+        </ul>
+      </template>
+    </el-alert>
   </div>
 
   <el-divider />
@@ -179,6 +253,81 @@ const features = [
   color: #475569;
   line-height: 1.6;
   margin: 0;
+}
+
+.submission-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.submission-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.submission-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.submission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.submission-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.submission-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.submission-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.submission-scene {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.submission-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin: 4px 0 0;
+}
+
+.submission-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.submission-list--ordered {
+  padding-left: 20px;
+}
+
+.submission-tip :deep(.el-alert__title) {
+  font-weight: 600;
 }
 
 .workflow-section {

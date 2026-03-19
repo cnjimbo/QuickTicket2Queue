@@ -37,6 +37,25 @@ export default {
     }>,
   installDownloadedAppUpdate: () =>
     ipcRenderer.invoke("install-downloaded-app-update") as Promise<boolean>,
+  onAppUpdateDownloadProgress: (cb: (progress: {
+    percent: number;
+    transferred: number;
+    total: number;
+    bytesPerSecond: number;
+  }) => void) => {
+    const listener = (...args: [unknown, {
+      percent: number;
+      transferred: number;
+      total: number;
+      bytesPerSecond: number;
+    }]) => {
+      cb(args[1]);
+    };
+    ipcRenderer.on("app-update-download-progress", listener);
+    return () => {
+      ipcRenderer.off("app-update-download-progress", listener);
+    };
+  },
   onAppCloseRequested: (cb: () => void | Promise<void>) => {
     const listener = () => {
       void cb();
