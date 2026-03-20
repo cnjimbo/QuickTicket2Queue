@@ -34,8 +34,18 @@ export class AppControllerUpdate {
 
     @IpcHandle("set-update-preferences")
     public async setUpdatePreferences(
-        @Payload() partialPreferences: { includeBeta?: boolean; allowDowngrade?: boolean } | undefined,
+        @Payload() partialPreferences: { includeBeta?: boolean; allowDowngrade?: boolean; allowAllVersions?: boolean } | undefined,
     ) {
         return await this.updateService.setUpdatePreferences(partialPreferences);
+    }
+
+    @IpcHandle("get-downgrade-version-options")
+    public async getDowngradeVersionOptions() {
+        return await this.updateService.getDowngradeVersionOptions();
+    }
+
+    @IpcHandle("prepare-update-to-version")
+    public async prepareUpdateToVersion(@Payload() targetVersion: string) {
+        return await this.updateService.prepareUpdateToVersion(targetVersion);
     }
 }

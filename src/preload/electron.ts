@@ -9,11 +9,13 @@ export default {
     ipcRenderer.invoke("get-update-preferences") as Promise<{
       includeBeta: boolean;
       allowDowngrade: boolean;
+      allowAllVersions: boolean;
     }>,
-  setUpdatePreferences: (preferences: { includeBeta?: boolean; allowDowngrade?: boolean }) =>
+  setUpdatePreferences: (preferences: { includeBeta?: boolean; allowDowngrade?: boolean; allowAllVersions?: boolean }) =>
     ipcRenderer.invoke("set-update-preferences", preferences) as Promise<{
       includeBeta: boolean;
       allowDowngrade: boolean;
+      allowAllVersions: boolean;
     }>,
   getAppVersion: () =>
     ipcRenderer.invoke("get-app-version") as Promise<string>,
@@ -26,6 +28,7 @@ export default {
       preferences?: {
         includeBeta: boolean;
         allowDowngrade: boolean;
+        allowAllVersions: boolean;
       };
     }>,
   downloadAppUpdate: () =>
@@ -37,6 +40,30 @@ export default {
       preferences?: {
         includeBeta: boolean;
         allowDowngrade: boolean;
+        allowAllVersions: boolean;
+      };
+    }>,
+  getDowngradeVersionOptions: () =>
+    ipcRenderer.invoke("get-downgrade-version-options") as Promise<{
+      currentVersion: string;
+      versions: Array<{
+        version: string;
+        releaseUrl: string;
+        channel: "stable" | "alpha" | "beta" | "rc";
+      }>;
+      message?: string;
+    }>,
+  prepareUpdateToVersion: (targetVersion: string) =>
+    ipcRenderer.invoke("prepare-update-to-version", targetVersion) as Promise<{
+      status: "ready" | "blocked" | "not-found" | "error";
+      currentVersion: string;
+      targetVersion?: string;
+      releaseUrl?: string;
+      message?: string;
+      preferences?: {
+        includeBeta: boolean;
+        allowDowngrade: boolean;
+        allowAllVersions: boolean;
       };
     }>,
   installDownloadedAppUpdate: () =>

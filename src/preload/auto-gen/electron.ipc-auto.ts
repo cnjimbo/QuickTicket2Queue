@@ -23,6 +23,8 @@ export const ipcInvoke = {
     ipcRenderer.invoke('get-app-version', ...args) as unknown as PreloadInvokeReturn<'get-app-version', true>,
   getDomainUser: (...args: IpcInvokeArgs<'get-domain-user'>): PreloadInvokeReturn<'get-domain-user', true> =>
     ipcRenderer.invoke('get-domain-user', ...args) as unknown as PreloadInvokeReturn<'get-domain-user', true>,
+  getDowngradeVersionOptions: (...args: IpcInvokeArgs<'get-downgrade-version-options'>): PreloadInvokeReturn<'get-downgrade-version-options', true> =>
+    ipcRenderer.invoke('get-downgrade-version-options', ...args) as unknown as PreloadInvokeReturn<'get-downgrade-version-options', true>,
   getTicketHistory: (...args: IpcInvokeArgs<'get-ticket-history'>): PreloadInvokeReturn<'get-ticket-history', true> =>
     ipcRenderer.invoke('get-ticket-history', ...args) as unknown as PreloadInvokeReturn<'get-ticket-history', true>,
   getTicketOptions: (...args: IpcInvokeArgs<'get-ticket-options'>): PreloadInvokeReturn<'get-ticket-options', true> =>
@@ -39,6 +41,8 @@ export const ipcInvoke = {
     ipcRenderer.invoke('is-domain-environment', ...args) as unknown as PreloadInvokeReturn<'is-domain-environment', true>,
   openLink: (...args: IpcInvokeArgs<'open-link'>): PreloadInvokeReturn<'open-link', true> =>
     ipcRenderer.invoke('open-link', ...args) as unknown as PreloadInvokeReturn<'open-link', true>,
+  prepareUpdateToVersion: (...args: IpcInvokeArgs<'prepare-update-to-version'>): PreloadInvokeReturn<'prepare-update-to-version', true> =>
+    ipcRenderer.invoke('prepare-update-to-version', ...args) as unknown as PreloadInvokeReturn<'prepare-update-to-version', true>,
   readCredential: (...args: IpcInvokeArgs<'readCredential'>): PreloadInvokeReturn<'readCredential', true> =>
     ipcRenderer.invoke('readCredential', ...args) as unknown as PreloadInvokeReturn<'readCredential', true>,
   resetTicketOptions: (...args: IpcInvokeArgs<'reset-ticket-options'>): PreloadInvokeReturn<'reset-ticket-options', true> =>

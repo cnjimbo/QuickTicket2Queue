@@ -35,6 +35,10 @@ export interface IpcInvokeMap {
     params: []
     return: Promise<string>
   }
+  'get-downgrade-version-options': {
+    params: []
+    return: Promise<DowngradeVersionListResult>
+  }
   'get-ticket-history': {
     params: []
     return: Promise<TicketHistoryItem[]>
@@ -67,6 +71,10 @@ export interface IpcInvokeMap {
     params: [url: string]
     return: Promise<void>
   }
+  'prepare-update-to-version': {
+    params: [targetVersion: string]
+    return: Promise<VersionUpdatePreparationResult>
+  }
   'readCredential': {
     params: []
     return: Promise<CredentialItem[]>
@@ -84,7 +92,7 @@ export interface IpcInvokeMap {
     return: Promise<true>
   }
   'set-update-preferences': {
-    params: [partialPreferences: { includeBeta?: boolean | undefined; allowDowngrade?: boolean | undefined; } | undefined]
+    params: [partialPreferences: { includeBeta?: boolean | undefined; allowDowngrade?: boolean | undefined; allowAllVersions?: boolean | undefined; } | undefined]
     return: Promise<UpdatePreferences>
   }
   'sync-ticket-options-from-github': {
