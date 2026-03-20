@@ -20,6 +20,7 @@ const isLoadingUpdatePreferences = ref(false)
 const isSavingUpdatePreferences = ref(false)
 const includeBetaUpdates = ref(false)
 const allowDowngradeUpdates = ref(true)
+const allowAllVersionsUpdates = ref(false)
 const currentVersion = ref('')
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
@@ -262,9 +263,11 @@ async function loadUpdatePreferences() {
     const preferences = await window.electron.getUpdatePreferences()
     includeBetaUpdates.value = preferences.includeBeta
     allowDowngradeUpdates.value = preferences.allowDowngrade
+    allowAllVersionsUpdates.value = preferences.allowAllVersions
   } catch {
     includeBetaUpdates.value = false
     allowDowngradeUpdates.value = true
+    allowAllVersionsUpdates.value = false
   } finally {
     isLoadingUpdatePreferences.value = false
   }
@@ -280,14 +283,16 @@ async function handleIncludeBetaPreferenceChange(value: string | number | boolea
     const preferences = await window.electron.setUpdatePreferences({
       includeBeta: nextValue,
       allowDowngrade: allowDowngradeUpdates.value,
+      allowAllVersions: allowAllVersionsUpdates.value,
     })
     includeBetaUpdates.value = preferences.includeBeta
     allowDowngradeUpdates.value = preferences.allowDowngrade
+    allowAllVersionsUpdates.value = preferences.allowAllVersions
   } catch {
     includeBetaUpdates.value = previousValue
     await window.electron.showNativeDialog({
       title: '保存更新设置失败',
-      message: '保存“接收 Pre 版更新”设置失败，请稍后重试。',
+      message: '保存“接收RC版更新”设置失败，请稍后重试。',
       buttons: ['确定'],
       type: 'error',
     })
@@ -306,14 +311,51 @@ async function handleAllowDowngradePreferenceChange(value: string | number | boo
     const preferences = await window.electron.setUpdatePreferences({
       includeBeta: includeBetaUpdates.value,
       allowDowngrade: nextValue,
+      allowAllVersions: allowAllVersionsUpdates.value,
     })
     includeBetaUpdates.value = preferences.includeBeta
     allowDowngradeUpdates.value = preferences.allowDowngrade
+    allowAllVersionsUpdates.value = preferences.allowAllVersions
   } catch {
     allowDowngradeUpdates.value = previousValue
     await window.electron.showNativeDialog({
       title: '保存更新设置失败',
       message: '保存“允许向下更新”设置失败，请稍后重试。',
+      buttons: ['确定'],
+      type: 'error',
+    })
+  } finally {
+    isSavingUpdatePreferences.value = false
+  }
+}
+
+async function handleConsoleTitleDoubleClick() {
+  if (isSavingUpdatePreferences.value) return
+
+  const nextValue = !allowAllVersionsUpdates.value
+  isSavingUpdatePreferences.value = true
+  try {
+    const preferences = await window.electron.setUpdatePreferences({
+      includeBeta: nextValue ? true : includeBetaUpdates.value,
+      allowDowngrade: nextValue ? true : allowDowngradeUpdates.value,
+      allowAllVersions: nextValue,
+    })
+    includeBetaUpdates.value = preferences.includeBeta
+    allowDowngradeUpdates.value = preferences.allowDowngrade
+    allowAllVersionsUpdates.value = preferences.allowAllVersions
+
+    await window.electron.showNativeDialog({
+      title: '自动更新模式切换',
+      message: nextValue
+        ? '已开启全版本更新模式：可接收稳定版与 alpha/beta/rc，并允许向下更新。'
+        : '已关闭全版本更新模式，恢复常规更新策略。',
+      buttons: ['确定'],
+      type: 'info',
+    })
+  } catch {
+    await window.electron.showNativeDialog({
+      title: '保存更新设置失败',
+      message: '切换全版本更新模式失败，请稍后重试。',
       buttons: ['确定'],
       type: 'error',
     })
@@ -409,7 +451,7 @@ const navLinks = computed(() => {
     <aside class="nav-panel">
       <div class="nav-brand">
         <p class="eyebrow">Quick Ticket to Queue</p>
-        <h1>控制台</h1>
+        <h1 @dblclick="handleConsoleTitleDoubleClick">控制台</h1>
         <p class="nav-subtitle">常用队列、凭据配置与工单提交入口</p>
       </div>
       <nav class="nav-links">
@@ -424,7 +466,7 @@ const navLinks = computed(() => {
           </button>
           <div v-if="link.to.includes('/help')" class="update-version">当前版本 {{ currentVersion || '-' }}</div>
           <div v-if="link.to.includes('/help')" class="update-beta-toggle">
-            <span class="update-beta-toggle__label">接收 Pre 版更新</span>
+            <span class="update-beta-toggle__label">接收RC版更新</span>
             <el-switch :model-value="includeBetaUpdates" size="small"
               :loading="isLoadingUpdatePreferences || isSavingUpdatePreferences" inline-prompt active-text="开"
               inactive-text="关" @change="handleIncludeBetaPreferenceChange" />

@@ -12,6 +12,7 @@ const APP_UPDATE_DOWNLOAD_PROGRESS_CHANNEL = "app-update-download-progress";
 type UpdatePreferences = {
     includeBeta: boolean;
     allowDowngrade: boolean;
+    allowAllVersions: boolean;
 };
 
 type ManualUpdateResult = {
@@ -38,10 +39,10 @@ type ParsedAppVersion = {
     sequence?: number;
 };
 
-const APP_PRERELEASE_VERSION_PATTERN = /^\d+\.\d+\.\d+-(alpha|beta|rc)\.\d+$/;
-const APP_STABLE_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const APP_PRERELEASE_VERSION_PATTERN = /^v?\d+\.\d+\.\d+-(alpha|beta|rc)(?:\.\d+)?$/;
+const APP_STABLE_VERSION_PATTERN = /^v?\d+\.\d+\.\d+$/;
 const APP_STABLE_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
-const APP_PRERELEASE_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)\.(\d+)$/;
+const APP_PRERELEASE_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)(?:\.(\d+))?$/;
 const APP_PRERELEASE_CHANNEL_WEIGHT: Record<AppPrereleaseChannel, number> = {
     alpha: 0,
     beta: 1,
@@ -58,6 +59,7 @@ export class AppServiceUpdate {
         defaults: {
             includeBeta: false,
             allowDowngrade: true,
+            allowAllVersions: false,
         },
     });
 
@@ -75,10 +77,20 @@ export class AppServiceUpdate {
         return {
             includeBeta: this.updatePreferencesStore.get("includeBeta", false),
             allowDowngrade: this.updatePreferencesStore.get("allowDowngrade", true),
+            allowAllVersions: this.updatePreferencesStore.get("allowAllVersions", false),
         };
     }
 
-    private resolveUpdaterChannel(preferences: UpdatePreferences): "latest" | "rc" {
+    private normalizeAppVersion(version: string): string {
+        return version.trim().replace(/^v/i, "");
+    }
+
+    private resolveUpdaterChannel(preferences: UpdatePreferences): "latest" | AppPrereleaseChannel {
+        if (preferences.allowAllVersions) {
+            // alpha channel can consume prerelease feeds most aggressively.
+            return "alpha";
+        }
+
         if (!preferences.includeBeta) {
             return "latest";
         }
@@ -86,26 +98,32 @@ export class AppServiceUpdate {
         return "rc";
     }
 
-    private isAllowedUpdateVersion(version: string, includePrerelease: boolean): boolean {
-        if (APP_STABLE_VERSION_PATTERN.test(version)) {
+    private isAllowedUpdateVersion(version: string, preferences: UpdatePreferences): boolean {
+        const normalizedVersion = this.normalizeAppVersion(version);
+
+        if (APP_STABLE_VERSION_PATTERN.test(normalizedVersion)) {
             return true;
         }
 
-        const prereleaseChannel = APP_PRERELEASE_VERSION_PATTERN.exec(version)?.[1] as AppPrereleaseChannel | undefined;
+        const prereleaseChannel = APP_PRERELEASE_VERSION_PATTERN.exec(normalizedVersion)?.[1] as AppPrereleaseChannel | undefined;
         if (!prereleaseChannel) {
             return false;
         }
 
-        if (!includePrerelease) {
+        if (preferences.allowAllVersions) {
+            return prereleaseChannel === "alpha" || prereleaseChannel === "beta" || prereleaseChannel === "rc";
+        }
+
+        if (!preferences.includeBeta) {
             return false;
         }
 
-        // Only RC prerelease updates are allowed in preview mode.
         return prereleaseChannel === "rc";
     }
 
     private parseAppVersion(version: string): ParsedAppVersion | null {
-        const stableMatch = APP_STABLE_VERSION_CAPTURE_PATTERN.exec(version);
+        const normalizedVersion = this.normalizeAppVersion(version);
+        const stableMatch = APP_STABLE_VERSION_CAPTURE_PATTERN.exec(normalizedVersion);
         if (stableMatch) {
             return {
                 major: Number(stableMatch[1]),
@@ -114,7 +132,7 @@ export class AppServiceUpdate {
             };
         }
 
-        const prereleaseMatch = APP_PRERELEASE_VERSION_CAPTURE_PATTERN.exec(version);
+        const prereleaseMatch = APP_PRERELEASE_VERSION_CAPTURE_PATTERN.exec(normalizedVersion);
         if (!prereleaseMatch) {
             return null;
         }
@@ -124,7 +142,7 @@ export class AppServiceUpdate {
             minor: Number(prereleaseMatch[2]),
             patch: Number(prereleaseMatch[3]),
             channel: prereleaseMatch[4] as AppPrereleaseChannel,
-            sequence: Number(prereleaseMatch[5]),
+            sequence: Number(prereleaseMatch[5] ?? 0),
         };
     }
 
@@ -171,8 +189,8 @@ export class AppServiceUpdate {
     }
 
     private applyUpdatePreferences(preferences = this.getUpdatePreferencesValue()): UpdatePreferences {
-        autoUpdater.allowPrerelease = preferences.includeBeta;
-        autoUpdater.allowDowngrade = preferences.allowDowngrade;
+        autoUpdater.allowPrerelease = preferences.includeBeta || preferences.allowAllVersions;
+        autoUpdater.allowDowngrade = preferences.allowDowngrade || preferences.allowAllVersions;
         autoUpdater.channel = this.resolveUpdaterChannel(preferences);
         return preferences;
     }
@@ -321,14 +339,14 @@ export class AppServiceUpdate {
                 };
             }
 
-            if (!this.isAllowedUpdateVersion(updateInfo.version, preferences.includeBeta)) {
+            if (!this.isAllowedUpdateVersion(updateInfo.version, preferences)) {
                 this.availableUpdateInfo = null;
                 this.downloadedUpdateInfo = null;
                 return {
                     status: "up-to-date",
                     version: currentVersion,
                     releaseUrl: this.getGitHubReleasesUrl(preferences.includeBeta),
-                    message: `检测到不受支持的更新版本 ${updateInfo.version}，已忽略（仅支持正式版与 RC）。`,
+                    message: `检测到不受支持的更新版本 ${updateInfo.version}，已忽略。`,
                     preferences,
                 };
             }
@@ -462,6 +480,7 @@ export class AppServiceUpdate {
         const nextPreferences: UpdatePreferences = {
             includeBeta: partialPreferences?.includeBeta ?? currentPreferences.includeBeta,
             allowDowngrade: partialPreferences?.allowDowngrade ?? currentPreferences.allowDowngrade,
+            allowAllVersions: partialPreferences?.allowAllVersions ?? currentPreferences.allowAllVersions,
         };
 
         this.updatePreferencesStore.set(nextPreferences);
