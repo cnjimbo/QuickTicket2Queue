@@ -1,4 +1,12 @@
 #!/bin/sh
 set -e
 
-"$(dirname "$0")/scripts/sync-app-version.sh"
+# Do not block merge completion for local tooling issues.
+if ! command -v pnpm >/dev/null 2>&1; then
+	echo "[hook] post-merge skipped: pnpm not found in PATH"
+	exit 0
+fi
+
+if ! "$(dirname "$0")/scripts/sync-app-version.sh"; then
+	echo "[hook] post-merge warning: version sync failed, merge is kept"
+fi
