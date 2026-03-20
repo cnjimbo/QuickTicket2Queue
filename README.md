@@ -147,10 +147,27 @@ pnpm dist:win
 
 ## CI 发布约束
 
-- 并发分组基于分支名：`github.head_ref || github.ref_name`
-- 同一分支的新流水线会取消进行中的同分组任务（`cancel-in-progress: true`）
-- 版本号需与分支发布策略匹配（如 `main` 对应稳定版，`develop` 对应 beta，`release/*` 对应 rc，`feature/*` 对应 alpha）
-- 当版本号不匹配时，流水线会输出明确错误并失败，后续 build/release 不会继续执行
+- 并发控制分两层：
+  - 工作流级别按分支分组（`github.head_ref || github.ref_name`），同分支新任务会取消旧任务
+  - 发布相关 job 按版本号分组，同版本新任务会取消旧任务，避免同版本并发发布冲突
+- 版本号需与分支发布策略匹配（`main` 对应稳定版，`develop/*` 对应 beta，`release/*` 对应 rc，`feature/*` 对应 alpha）
+- 自动发布策略：仅 `alpha` / `beta` 版本在 push 时自动发布
+- `stable` / `rc` 默认不自动发布，可通过手动触发 `workflow_dispatch` 并设置 `force_release=true` 强制发布
+- 支持通过 commit message 控制发布（仅 push 事件生效）：
+  - `[ci:release]`：强制发布（高于默认 channel 策略）
+  - `[ci:skip-release]`：跳过发布（最高优先级）
+- 当版本规则校验失败时，流水线会输出明确错误并失败，后续 build/release 不会继续执行
+
+### 手动发布输入说明
+
+- `publish_branch`：手动输入分支名，例如 `main`、`release/26.3.4`
+- `publish_commit`：可选，手动输入 commit SHA；不填时默认使用所选分支最新提交
+
+### 如何查找 commit
+
+- 本地命令行：`git log --oneline -n 20`（左侧短 SHA 可用于定位，再复制完整 SHA）
+- 指定分支查看：`git log --oneline origin/<branch> -n 20`
+- GitHub 网页：进入仓库的 Commits 页面，打开目标提交后复制完整 SHA
 
 ## 数据与配置说明
 

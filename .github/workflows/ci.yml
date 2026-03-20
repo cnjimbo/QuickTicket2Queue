@@ -3,9 +3,26 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      publish_branch:
+        description: "Manual input: branch name to release from (example: main or release/26.3.4)"
+        required: true
+      publish_commit:
+        description: "Manual input (optional): commit SHA; find via `git log --oneline -n 20` or GitHub commit page"
+        required: false
+        default: ""
+      force_release:
+        description: "Force release for non-alpha/beta versions (stable/rc)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 concurrency:
-  group: ${{ github.workflow }}-branch-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-branch-${{ github.event.inputs.publish_branch || github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -21,6 +38,9 @@ jobs:
       current_version: ${{ steps.read_package_version.outputs.current_version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.publish_commit || github.event.inputs.publish_branch || github.sha }}
 
       - name: Read package version
         id: read_package_version
@@ -30,7 +50,7 @@ jobs:
 
   prepare_release_metadata:
     needs: read_package_version
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-release-version-${{ needs.read_package_version.outputs.current_version }}-prepare_release_metadata
@@ -39,6 +59,8 @@ jobs:
       contents: write
     outputs:
       branch_name: ${{ steps.version_check.outputs.branch_name }}
+      target_branch: ${{ steps.version_check.outputs.target_branch }}
+      target_sha: ${{ steps.version_check.outputs.target_sha }}
       current_version: ${{ steps.version_check.outputs.current_version }}
       release_version: ${{ steps.version_check.outputs.release_version }}
       release_enabled: ${{ steps.version_check.outputs.release_enabled }}
@@ -59,29 +81,75 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.publish_commit || github.event.inputs.publish_branch || github.sha }}
 
       - name: Validate branch/version and prepare release metadata
         id: version_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURRENT_VERSION: ${{ needs.read_package_version.outputs.current_version }}
+          FORCE_RELEASE: ${{ github.event.inputs.force_release || 'false' }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || '' }}
+          DISPATCH_BRANCH: ${{ github.event.inputs.publish_branch || '' }}
+          DISPATCH_COMMIT: ${{ github.event.inputs.publish_commit || '' }}
         run: |
           echo "[信息] 正在根据 package.json 版本号和当前分支判断发布策略"
 
           BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          TARGET_BRANCH="$BRANCH_NAME"
+          TARGET_SHA=$(git rev-parse HEAD)
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -z "$DISPATCH_BRANCH" ]; then
+              echo "Error: publish_branch is required for workflow_dispatch"
+              exit 1
+            fi
+
+            TARGET_BRANCH="$DISPATCH_BRANCH"
+            BRANCH_NAME="$DISPATCH_BRANCH"
+
+            if [ -n "$DISPATCH_COMMIT" ]; then
+              if ! git rev-parse "$DISPATCH_COMMIT^{commit}" >/dev/null 2>&1; then
+                echo "Error: publish_commit is not a valid commit: $DISPATCH_COMMIT"
+                exit 1
+              fi
+              TARGET_SHA=$(git rev-parse "$DISPATCH_COMMIT^{commit}")
+            fi
+          fi
+
+          SHORT_SHA=$(printf '%s' "$TARGET_SHA" | cut -c1-7)
           RELEASE_VERSION="$CURRENT_VERSION"
           SKIP_REASON=""
           RELEASE_TYPE="none"
           TAG_NAME="v$RELEASE_VERSION"
           PUBLISH_TAG_NAME="$TAG_NAME"
           PUBLISH_TAG_PREFIX="v"
-          SHORT_SHA="${GITHUB_SHA::7}"
           SHOULD_TAG="false"
           OVERWRITE="false"
           PRERELEASE="false"
+          RELEASE_CHANNEL="stable"
           VALIDATION_STATUS="skipped"
           RELEASE_ENABLED="false"
           POLICY_ERROR=""
+          FORCE_BY_COMMIT="false"
+          SKIP_BY_COMMIT="false"
+
+          # Commit message controls (push only):
+          # - [ci:release]      => force release
+          # - [ci:skip-release] => skip release
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ -n "$COMMIT_MESSAGE" ]; then
+            if printf '%s' "$COMMIT_MESSAGE" | grep -Eqi '\[ci:release\]'; then
+              FORCE_BY_COMMIT="true"
+            fi
+            if printf '%s' "$COMMIT_MESSAGE" | grep -Eqi '\[ci:skip-release\]'; then
+              SKIP_BY_COMMIT="true"
+            fi
+          fi
+
+          if printf '%s' "$CURRENT_VERSION" | grep -Eq -- '-[A-Za-z]+\.[0-9]+$'; then
+            RELEASE_CHANNEL=$(printf '%s' "$CURRENT_VERSION" | sed -E 's/^.*-([A-Za-z]+)\.[0-9]+$/\1/' | tr '[:upper:]' '[:lower:]')
+          fi
+
           set +e
           VALIDATION_OUTPUT=$(VALIDATION_OUTPUT_FORMAT=github BRANCH_NAME_OVERRIDE="$BRANCH_NAME" APP_VERSION_OVERRIDE="$CURRENT_VERSION" npx --yes tsx .husky/scripts/validate-branch-version-policy.ts 2>&1)
           VALIDATION_EXIT=$?
@@ -106,11 +174,42 @@ jobs:
             elif [ "$VALIDATION_STATUS" = "skipped" ]; then
               SKIP_REASON="当前分支 $BRANCH_NAME 不参与 CI 发布。"
             elif [ "$RELEASE_ENABLED" = "true" ]; then
-              SHOULD_TAG="true"
+              if [ "$SKIP_BY_COMMIT" = "true" ]; then
+                SHOULD_TAG="false"
+                SKIP_REASON="提交信息包含 [ci:skip-release]，已按指令跳过发布。"
+              elif [ "$FORCE_BY_COMMIT" = "true" ]; then
+                SHOULD_TAG="true"
+              elif [ "$RELEASE_CHANNEL" = "alpha" ] || [ "$RELEASE_CHANNEL" = "beta" ]; then
+                SHOULD_TAG="true"
+              elif [ "$FORCE_RELEASE" = "true" ]; then
+                SHOULD_TAG="true"
+              else
+                SHOULD_TAG="false"
+                SKIP_REASON="当前版本 $CURRENT_VERSION（channel=$RELEASE_CHANNEL）默认不自动发布。仅 alpha/beta 自动发布；如需发布 stable/rc，请手动触发 workflow_dispatch 并设置 force_release=true。"
+              fi
             fi
           fi
 
           if [ -z "$POLICY_ERROR" ] && [ "$RELEASE_ENABLED" = "true" ] && [ "$VALIDATION_STATUS" = "passed" ]; then
+            if [ "$SHOULD_TAG" != "true" ]; then
+              echo "[信息] 本次跳过打 tag 与发布：$SKIP_REASON"
+              echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+              echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+              echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+              echo "release_enabled=$RELEASE_ENABLED" >> "$GITHUB_OUTPUT"
+              echo "validation_status=$VALIDATION_STATUS" >> "$GITHUB_OUTPUT"
+              echo "should_tag=$SHOULD_TAG" >> "$GITHUB_OUTPUT"
+              echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"
+              echo "policy_error=$POLICY_ERROR" >> "$GITHUB_OUTPUT"
+              echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+              echo "publish_tag_name=$PUBLISH_TAG_NAME" >> "$GITHUB_OUTPUT"
+              echo "publish_tag_prefix=$PUBLISH_TAG_PREFIX" >> "$GITHUB_OUTPUT"
+              echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+              echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+              echo "overwrite=${OVERWRITE:-false}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
             git fetch --tags
             TAG_EXISTS=false
             RELEASE_EXISTS=false
@@ -127,9 +226,11 @@ jobs:
             fi
           fi
 
-          echo "[信息] 版本检查结果：branch=$BRANCH_NAME version=$CURRENT_VERSION validation_status=${VALIDATION_STATUS:-unknown} release_enabled=${RELEASE_ENABLED:-false} release_type=${RELEASE_TYPE:-none} prerelease=${PRERELEASE:-false} should_tag=${SHOULD_TAG:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
+          echo "[信息] 版本检查结果：branch=$BRANCH_NAME target_sha=$TARGET_SHA version=$CURRENT_VERSION validation_status=${VALIDATION_STATUS:-unknown} release_enabled=${RELEASE_ENABLED:-false} release_type=${RELEASE_TYPE:-none} prerelease=${PRERELEASE:-false} should_tag=${SHOULD_TAG:-false} force_by_commit=${FORCE_BY_COMMIT:-false} skip_by_commit=${SKIP_BY_COMMIT:-false} publish_tag=$PUBLISH_TAG_NAME overwrite=${OVERWRITE:-false}"
 
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+          echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_enabled=$RELEASE_ENABLED" >> "$GITHUB_OUTPUT"
@@ -146,9 +247,10 @@ jobs:
 
       - name: Ensure publish tag points to current commit
         id: ensure_publish_tag
-        if: github.event_name == 'push' && steps.version_check.outputs.should_tag == 'true'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.version_check.outputs.should_tag == 'true'
         env:
           PUBLISH_TAG_NAME: ${{ steps.version_check.outputs.publish_tag_name }}
+          TARGET_SHA: ${{ steps.version_check.outputs.target_sha }}
         run: |
           echo "[信息] 正在为发布创建 git tag：$PUBLISH_TAG_NAME"
 
@@ -159,20 +261,20 @@ jobs:
 
           if git rev-parse "$PUBLISH_TAG_NAME" >/dev/null 2>&1; then
             EXISTING_SHA="$(git rev-list -n 1 "$PUBLISH_TAG_NAME")"
-            if [ "$EXISTING_SHA" = "$GITHUB_SHA" ]; then
+            if [ "$EXISTING_SHA" = "$TARGET_SHA" ]; then
               echo "[信息] Tag 已存在且指向当前提交，复用现有 tag：$PUBLISH_TAG_NAME"
               echo "created=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
 
-            echo "[信息] Tag 已存在但指向不同提交，将更新 tag：$PUBLISH_TAG_NAME $EXISTING_SHA -> $GITHUB_SHA"
-            git tag -f "$PUBLISH_TAG_NAME" "$GITHUB_SHA"
+            echo "[信息] Tag 已存在但指向不同提交，将更新 tag：$PUBLISH_TAG_NAME $EXISTING_SHA -> $TARGET_SHA"
+            git tag -f "$PUBLISH_TAG_NAME" "$TARGET_SHA"
             git push --force origin "refs/tags/$PUBLISH_TAG_NAME"
             echo "created=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          git tag "$PUBLISH_TAG_NAME" "$GITHUB_SHA"
+          git tag "$PUBLISH_TAG_NAME" "$TARGET_SHA"
           git push origin "refs/tags/$PUBLISH_TAG_NAME"
           echo "created=true" >> "$GITHUB_OUTPUT"
 
@@ -188,7 +290,7 @@ jobs:
 
       - name: Create or update GitHub draft release
         id: create_draft_release
-        if: github.event_name == 'push' && steps.ensure_publish_tag.outputs.created == 'true'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.ensure_publish_tag.outputs.created == 'true'
         uses: softprops/action-gh-release@v2.6.1
         with:
           tag_name: ${{ steps.version_check.outputs.publish_tag_name }}
@@ -202,7 +304,7 @@ jobs:
 
       - name: Mark draft release creation result
         id: mark_draft_release_created
-        if: github.event_name == 'push' && steps.ensure_publish_tag.outputs.created == 'true'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.ensure_publish_tag.outputs.created == 'true'
         run: |
           echo "[信息] 已为 tag ${{ steps.version_check.outputs.publish_tag_name }} 创建 GitHub 草稿 release"
           echo "released=true" >> "$GITHUB_OUTPUT"
@@ -232,7 +334,7 @@ jobs:
   build_release_artifacts:
     needs: [read_package_version, prepare_release_metadata]
     runs-on: ${{ matrix.os }}
-    if: github.event_name == 'push' && needs.prepare_release_metadata.outputs.released == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.prepare_release_metadata.outputs.released == 'true'
     timeout-minutes: 90
     concurrency:
       group: ${{ github.workflow }}-release-version-${{ needs.prepare_release_metadata.outputs.release_version }}-build_release_artifacts-${{ matrix.os }}
@@ -245,6 +347,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare_release_metadata.outputs.target_sha }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4.4.0
@@ -269,7 +374,7 @@ jobs:
         env:
           ELECTRON_BUILDER_RELEASE_BUILD: "true"
           ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.prepare_release_metadata.outputs.publish_tag_prefix }}
-          ELECTRON_BUILDER_ARTIFACT_COMMIT: ${{ github.sha }}
+          ELECTRON_BUILDER_ARTIFACT_COMMIT: ${{ needs.prepare_release_metadata.outputs.target_sha }}
           GITHUB_REF_NAME: ${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
           GITHUB_REF: refs/tags/${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
         run: |
@@ -361,7 +466,7 @@ jobs:
     needs:
       [read_package_version, prepare_release_metadata, build_release_artifacts]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && needs.prepare_release_metadata.outputs.released == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.prepare_release_metadata.outputs.released == 'true'
     concurrency:
       group: ${{ github.workflow }}-release-version-${{ needs.prepare_release_metadata.outputs.release_version }}-publish_release
       cancel-in-progress: true
@@ -378,7 +483,7 @@ jobs:
           PUBLISH_TAG_NAME: ${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
           PRERELEASE: ${{ needs.prepare_release_metadata.outputs.prerelease }}
           OVERWRITE: ${{ needs.prepare_release_metadata.outputs.overwrite }}
-          TARGET_SHA: ${{ github.sha }}
+          TARGET_SHA: ${{ needs.prepare_release_metadata.outputs.target_sha }}
         run: |
           echo "[信息] 正在完成 release 发布：publish_tag=$PUBLISH_TAG_NAME final_tag=$TAG_NAME prerelease=$PRERELEASE overwrite=$OVERWRITE"
 
@@ -462,7 +567,7 @@ jobs:
         publish_release,
       ]
     runs-on: ubuntu-latest
-    if: always() && github.event_name == 'push' && needs.prepare_release_metadata.outputs.publish_tag_name != '' && (needs.prepare_release_metadata.result != 'success' || needs.build_release_artifacts.result != 'success' || needs.publish_release.result != 'success')
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.prepare_release_metadata.outputs.publish_tag_name != '' && (needs.prepare_release_metadata.result != 'success' || needs.build_release_artifacts.result != 'success' || needs.publish_release.result != 'success')
     concurrency:
       group: ${{ github.workflow }}-release-version-${{ needs.prepare_release_metadata.outputs.release_version }}-cleanup_failed_release
       cancel-in-progress: true
