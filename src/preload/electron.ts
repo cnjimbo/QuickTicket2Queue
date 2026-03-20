@@ -8,10 +8,12 @@ export default {
   getUpdatePreferences: () =>
     ipcRenderer.invoke("get-update-preferences") as Promise<{
       includeBeta: boolean;
+      allowDowngrade: boolean;
     }>,
-  setUpdatePreferences: (preferences: { includeBeta: boolean }) =>
+  setUpdatePreferences: (preferences: { includeBeta?: boolean; allowDowngrade?: boolean }) =>
     ipcRenderer.invoke("set-update-preferences", preferences) as Promise<{
       includeBeta: boolean;
+      allowDowngrade: boolean;
     }>,
   getAppVersion: () =>
     ipcRenderer.invoke("get-app-version") as Promise<string>,
@@ -23,6 +25,7 @@ export default {
       message?: string;
       preferences?: {
         includeBeta: boolean;
+        allowDowngrade: boolean;
       };
     }>,
   downloadAppUpdate: () =>
@@ -33,6 +36,7 @@ export default {
       message?: string;
       preferences?: {
         includeBeta: boolean;
+        allowDowngrade: boolean;
       };
     }>,
   installDownloadedAppUpdate: () =>

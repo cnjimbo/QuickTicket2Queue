@@ -19,6 +19,7 @@ const downloadProgressPercent = ref(0)
 const isLoadingUpdatePreferences = ref(false)
 const isSavingUpdatePreferences = ref(false)
 const includeBetaUpdates = ref(false)
+const allowDowngradeUpdates = ref(true)
 const currentVersion = ref('')
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
@@ -260,27 +261,59 @@ async function loadUpdatePreferences() {
   try {
     const preferences = await window.electron.getUpdatePreferences()
     includeBetaUpdates.value = preferences.includeBeta
+    allowDowngradeUpdates.value = preferences.allowDowngrade
   } catch {
     includeBetaUpdates.value = false
+    allowDowngradeUpdates.value = true
   } finally {
     isLoadingUpdatePreferences.value = false
   }
 }
 
-async function handleUpdatePreferenceChange(value: string | number | boolean) {
+async function handleIncludeBetaPreferenceChange(value: string | number | boolean) {
   if (isSavingUpdatePreferences.value) return
 
   const nextValue = Boolean(value)
   const previousValue = includeBetaUpdates.value
   isSavingUpdatePreferences.value = true
   try {
-    const preferences = await window.electron.setUpdatePreferences({ includeBeta: nextValue })
+    const preferences = await window.electron.setUpdatePreferences({
+      includeBeta: nextValue,
+      allowDowngrade: allowDowngradeUpdates.value,
+    })
     includeBetaUpdates.value = preferences.includeBeta
+    allowDowngradeUpdates.value = preferences.allowDowngrade
   } catch {
     includeBetaUpdates.value = previousValue
     await window.electron.showNativeDialog({
       title: '保存更新设置失败',
       message: '保存“接收 Pre 版更新”设置失败，请稍后重试。',
+      buttons: ['确定'],
+      type: 'error',
+    })
+  } finally {
+    isSavingUpdatePreferences.value = false
+  }
+}
+
+async function handleAllowDowngradePreferenceChange(value: string | number | boolean) {
+  if (isSavingUpdatePreferences.value) return
+
+  const nextValue = Boolean(value)
+  const previousValue = allowDowngradeUpdates.value
+  isSavingUpdatePreferences.value = true
+  try {
+    const preferences = await window.electron.setUpdatePreferences({
+      includeBeta: includeBetaUpdates.value,
+      allowDowngrade: nextValue,
+    })
+    includeBetaUpdates.value = preferences.includeBeta
+    allowDowngradeUpdates.value = preferences.allowDowngrade
+  } catch {
+    allowDowngradeUpdates.value = previousValue
+    await window.electron.showNativeDialog({
+      title: '保存更新设置失败',
+      message: '保存“允许向下更新”设置失败，请稍后重试。',
       buttons: ['确定'],
       type: 'error',
     })
@@ -394,7 +427,13 @@ const navLinks = computed(() => {
             <span class="update-beta-toggle__label">接收 Pre 版更新</span>
             <el-switch :model-value="includeBetaUpdates" size="small"
               :loading="isLoadingUpdatePreferences || isSavingUpdatePreferences" inline-prompt active-text="开"
-              inactive-text="关" @change="handleUpdatePreferenceChange" />
+              inactive-text="关" @change="handleIncludeBetaPreferenceChange" />
+          </div>
+          <div v-if="link.to.includes('/help')" class="update-beta-toggle">
+            <span class="update-beta-toggle__label">允许向下更新</span>
+            <el-switch :model-value="allowDowngradeUpdates" size="small"
+              :loading="isLoadingUpdatePreferences || isSavingUpdatePreferences" inline-prompt active-text="开"
+              inactive-text="关" @change="handleAllowDowngradePreferenceChange" />
           </div>
         </template>
       </nav>

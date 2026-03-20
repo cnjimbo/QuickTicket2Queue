@@ -11,6 +11,7 @@ const APP_UPDATE_DOWNLOAD_PROGRESS_CHANNEL = "app-update-download-progress";
 
 type UpdatePreferences = {
     includeBeta: boolean;
+    allowDowngrade: boolean;
 };
 
 type ManualUpdateResult = {
@@ -29,9 +30,23 @@ type DownloadProgressPayload = {
 };
 
 type AppPrereleaseChannel = "alpha" | "beta" | "rc";
+type ParsedAppVersion = {
+    major: number;
+    minor: number;
+    patch: number;
+    channel?: AppPrereleaseChannel;
+    sequence?: number;
+};
 
 const APP_PRERELEASE_VERSION_PATTERN = /^\d+\.\d+\.\d+-(alpha|beta|rc)\.\d+$/;
 const APP_STABLE_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const APP_STABLE_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
+const APP_PRERELEASE_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)\.(\d+)$/;
+const APP_PRERELEASE_CHANNEL_WEIGHT: Record<AppPrereleaseChannel, number> = {
+    alpha: 0,
+    beta: 1,
+    rc: 2,
+};
 
 @Injectable()
 export class AppServiceUpdate {
@@ -42,6 +57,7 @@ export class AppServiceUpdate {
         name: "update-preferences",
         defaults: {
             includeBeta: false,
+            allowDowngrade: true,
         },
     });
 
@@ -58,6 +74,7 @@ export class AppServiceUpdate {
     private getUpdatePreferencesValue(): UpdatePreferences {
         return {
             includeBeta: this.updatePreferencesStore.get("includeBeta", false),
+            allowDowngrade: this.updatePreferencesStore.get("allowDowngrade", true),
         };
     }
 
@@ -87,8 +104,75 @@ export class AppServiceUpdate {
         return prereleaseChannel === "rc";
     }
 
+    private parseAppVersion(version: string): ParsedAppVersion | null {
+        const stableMatch = APP_STABLE_VERSION_CAPTURE_PATTERN.exec(version);
+        if (stableMatch) {
+            return {
+                major: Number(stableMatch[1]),
+                minor: Number(stableMatch[2]),
+                patch: Number(stableMatch[3]),
+            };
+        }
+
+        const prereleaseMatch = APP_PRERELEASE_VERSION_CAPTURE_PATTERN.exec(version);
+        if (!prereleaseMatch) {
+            return null;
+        }
+
+        return {
+            major: Number(prereleaseMatch[1]),
+            minor: Number(prereleaseMatch[2]),
+            patch: Number(prereleaseMatch[3]),
+            channel: prereleaseMatch[4] as AppPrereleaseChannel,
+            sequence: Number(prereleaseMatch[5]),
+        };
+    }
+
+    private compareAppVersion(candidateVersion: string, currentVersion: string): number {
+        const candidate = this.parseAppVersion(candidateVersion);
+        const current = this.parseAppVersion(currentVersion);
+        if (!candidate || !current) {
+            return 0;
+        }
+
+        if (candidate.major !== current.major) {
+            return candidate.major - current.major;
+        }
+
+        if (candidate.minor !== current.minor) {
+            return candidate.minor - current.minor;
+        }
+
+        if (candidate.patch !== current.patch) {
+            return candidate.patch - current.patch;
+        }
+
+        const candidateStable = !candidate.channel;
+        const currentStable = !current.channel;
+
+        if (candidateStable && currentStable) {
+            return 0;
+        }
+
+        if (candidateStable) {
+            return 1;
+        }
+
+        if (currentStable) {
+            return -1;
+        }
+
+        const channelDelta = APP_PRERELEASE_CHANNEL_WEIGHT[candidate.channel!] - APP_PRERELEASE_CHANNEL_WEIGHT[current.channel!];
+        if (channelDelta !== 0) {
+            return channelDelta;
+        }
+
+        return (candidate.sequence ?? 0) - (current.sequence ?? 0);
+    }
+
     private applyUpdatePreferences(preferences = this.getUpdatePreferencesValue()): UpdatePreferences {
         autoUpdater.allowPrerelease = preferences.includeBeta;
+        autoUpdater.allowDowngrade = preferences.allowDowngrade;
         autoUpdater.channel = this.resolveUpdaterChannel(preferences);
         return preferences;
     }
@@ -139,7 +223,6 @@ export class AppServiceUpdate {
         this.applyUpdatePreferences();
         autoUpdater.autoDownload = false;
         autoUpdater.autoInstallOnAppQuit = false;
-        autoUpdater.allowDowngrade = true;
 
         autoUpdater.on("error", (error) => {
             console.error("Auto update error:", error);
@@ -214,15 +297,26 @@ export class AppServiceUpdate {
         try {
             const result = await autoUpdater.checkForUpdates();
             const updateInfo = result?.updateInfo ?? this.availableUpdateInfo;
-            const currentVersion = app.getVersion();
+            const currentVersion = this.getCurrentAppVersion();
+            const versionDelta = updateInfo
+                ? this.compareAppVersion(updateInfo.version, currentVersion)
+                : 0;
 
-            if (!updateInfo || updateInfo.version === currentVersion) {
+            if (
+                !updateInfo
+                || versionDelta === 0
+                || (versionDelta < 0 && !preferences.allowDowngrade)
+            ) {
                 this.availableUpdateInfo = null;
                 this.downloadedUpdateInfo = null;
                 return {
                     status: "up-to-date",
                     version: currentVersion,
                     releaseUrl: this.getGitHubReleasesUrl(preferences.includeBeta),
+                    message:
+                        versionDelta < 0 && !preferences.allowDowngrade
+                            ? `检测到可回退版本 ${updateInfo?.version}，但当前未启用向下更新。`
+                            : undefined,
                     preferences,
                 };
             }
@@ -363,8 +457,11 @@ export class AppServiceUpdate {
     public async setUpdatePreferences(partialPreferences: Partial<UpdatePreferences> | undefined): Promise<UpdatePreferences> {
         this.initializeAutoUpdater();
 
+        const currentPreferences = this.getUpdatePreferencesValue();
+
         const nextPreferences: UpdatePreferences = {
-            includeBeta: Boolean(partialPreferences?.includeBeta),
+            includeBeta: partialPreferences?.includeBeta ?? currentPreferences.includeBeta,
+            allowDowngrade: partialPreferences?.allowDowngrade ?? currentPreferences.allowDowngrade,
         };
 
         this.updatePreferencesStore.set(nextPreferences);

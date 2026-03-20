@@ -1,4 +1,7 @@
 #!/bin/sh
+set -e
+
+# Sync package.json version to the current branch naming policy before commit.
 "$(dirname "$0")/scripts/sync-app-version.sh" --stage
 "$(dirname "$0")/scripts/validate-branch-version-policy.sh"
 pnpm exec lint-staged
