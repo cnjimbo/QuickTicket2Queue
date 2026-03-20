@@ -1,0 +1,96 @@
+name: Find Unreleased Tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_prefix:
+        description: "Optional: filter tags by prefix (example: v)"
+        required: false
+        default: "v"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  find_unreleased_tags:
+    runs-on: ubuntu-latest
+    outputs:
+      unreleased_tags: ${{ steps.find_unreleased.outputs.unreleased_tags }}
+      unreleased_count: ${{ steps.find_unreleased.outputs.unreleased_count }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Find unreleased tags
+        id: find_unreleased
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_PREFIX: ${{ github.event.inputs.tag_prefix }}
+        run: |
+          echo "[信息] 正在获取所有 git tag 列表"
+          git fetch --tags
+
+          # Use git tag -l with glob pattern to safely match prefix without regex issues
+          ALL_TAGS=$(git tag -l "${TAG_PREFIX}*" --sort=-creatordate)
+
+          if [ -z "$ALL_TAGS" ]; then
+            echo "[信息] 未找到匹配前缀 '${TAG_PREFIX}' 的 tag"
+            echo "unreleased_tags=" >> "$GITHUB_OUTPUT"
+            echo "unreleased_count=0" >> "$GITHUB_OUTPUT"
+
+            {
+              echo "## 查找未发布 Tag 结果"
+              echo ""
+              echo "未找到匹配前缀 \`${TAG_PREFIX}\` 的 tag。"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          TAG_COUNT=$(echo "$ALL_TAGS" | wc -l | tr -d ' ')
+          echo "[信息] 共找到 ${TAG_COUNT} 个匹配前缀 '${TAG_PREFIX}' 的 tag，正在逐一检查对应 release 是否存在"
+
+          echo "[信息] 正在获取所有已发布（非草稿）release 列表"
+          RELEASED_TAGS_SORTED=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '.[] | select(.draft == false) | .tag_name' | sort)
+
+          # Use comm -23 on sorted lists for efficient O(n log n) set difference
+          ALL_TAGS_SORTED=$(echo "$ALL_TAGS" | sort)
+          UNRELEASED_LIST=$(comm -23 <(echo "$ALL_TAGS_SORTED") <(echo "$RELEASED_TAGS_SORTED"))
+
+          UNRELEASED_COUNT=0
+          UNRELEASED_TAGS=""
+          if [ -n "$UNRELEASED_LIST" ]; then
+            UNRELEASED_COUNT=$(echo "$UNRELEASED_LIST" | wc -l | tr -d ' ')
+            UNRELEASED_TAGS=$(echo "$UNRELEASED_LIST" | tr '\n' ',' | sed 's/,$//')
+            echo "$UNRELEASED_LIST" | while IFS= read -r tag; do
+              echo "[信息] 未发布 tag：$tag"
+            done
+          fi
+
+          echo "unreleased_tags=$UNRELEASED_TAGS" >> "$GITHUB_OUTPUT"
+          echo "unreleased_count=$UNRELEASED_COUNT" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 查找未发布 Tag 结果"
+            echo ""
+            echo "- **Tag 总数（前缀 \`${TAG_PREFIX}\`）**：${TAG_COUNT}"
+            echo "- **未发布 Tag 数量**：${UNRELEASED_COUNT}"
+            echo ""
+            if [ "$UNRELEASED_COUNT" -gt 0 ]; then
+              echo "### 未发布 Tag 列表"
+              echo ""
+              echo "| Tag |"
+              echo "| --- |"
+              echo "$UNRELEASED_LIST" | while IFS= read -r t; do
+                echo "| \`$t\` |"
+              done
+            else
+              echo "所有 tag 均已对应发布，无未发布 tag。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "[信息] 检查完成：共 ${TAG_COUNT} 个 tag，其中 ${UNRELEASED_COUNT} 个未发布"
