@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-branch-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -29,7 +33,7 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-auto_tag_release
+      group: ${{ github.workflow }}-release-version-${{ needs.read_package_version.outputs.current_version }}-prepare_release_metadata
       cancel-in-progress: true
     permissions:
       contents: write
@@ -231,7 +235,7 @@ jobs:
     if: github.event_name == 'push' && needs.prepare_release_metadata.outputs.released == 'true'
     timeout-minutes: 90
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-release-${{ matrix.os }}
+      group: ${{ github.workflow }}-release-version-${{ needs.prepare_release_metadata.outputs.release_version }}-build_release_artifacts-${{ matrix.os }}
       cancel-in-progress: true
     strategy:
       matrix:
@@ -359,7 +363,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && needs.prepare_release_metadata.outputs.released == 'true'
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-finalize_release
+      group: ${{ github.workflow }}-release-version-${{ needs.prepare_release_metadata.outputs.release_version }}-publish_release
       cancel-in-progress: true
     permissions:
       contents: write
@@ -460,7 +464,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && github.event_name == 'push' && needs.prepare_release_metadata.outputs.publish_tag_name != '' && (needs.prepare_release_metadata.result != 'success' || needs.build_release_artifacts.result != 'success' || needs.publish_release.result != 'success')
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}-cleanup_on_failure_or_cancel
+      group: ${{ github.workflow }}-release-version-${{ needs.prepare_release_metadata.outputs.release_version }}-cleanup_failed_release
       cancel-in-progress: true
     permissions:
       contents: write
