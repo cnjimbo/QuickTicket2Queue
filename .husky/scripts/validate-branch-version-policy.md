@@ -21,6 +21,15 @@
 - `feature/*`：同步为 `alpha` 预发布版 `x.y.z-alpha.N`
 - 其他开始的分支：同步为 `alpha` 预发布版 `x.y.z-alpha.N`
 
+## Hook 安全原则
+
+- 适用范围为 `.husky` 下所有 hook 入口文件与 `scripts` 子目录脚本
+- Hook 只允许修改工作区和暂存区内容，例如修改 `package.json` 与执行 `git add`
+- Hook 严禁主动修改 HEAD，禁止执行会变更引用或触发嵌套 Git 流程的命令，例如 `git checkout`、`git switch`、`git commit`、`git merge`、`git rebase`、`git reset`
+- Hook 严禁在执行期间触发新的提交流程，避免与当前 commit/push 流程并发更新引用
+- 所有 hook 执行前都必须先通过静态扫描，确认未引入危险 Git 命令
+- `pre-commit` 与 `pre-push` 在结束前必须校验 HEAD 未变化，若变化则立即失败
+
 ## 分支与版本规则
 
 ### `main`
@@ -68,6 +77,7 @@
 - 如果当前为 detached HEAD（无法识别有效分支名），直接失败
 - 如果版本格式不在支持范围内，直接失败
 - 如果分支与版本渠道不匹配，直接失败
+- 如果 hook 扫描到会修改 HEAD 的 Git 命令，直接失败
 
 ## 输出要求
 
