@@ -43,6 +43,29 @@ export default {
         allowAllVersions: boolean;
       };
     }>,
+  getDowngradeVersionOptions: () =>
+    ipcRenderer.invoke("get-downgrade-version-options") as Promise<{
+      currentVersion: string;
+      versions: Array<{
+        version: string;
+        releaseUrl: string;
+        channel: "stable" | "alpha" | "beta" | "rc";
+      }>;
+      message?: string;
+    }>,
+  prepareUpdateToVersion: (targetVersion: string) =>
+    ipcRenderer.invoke("prepare-update-to-version", targetVersion) as Promise<{
+      status: "ready" | "blocked" | "not-found" | "error";
+      currentVersion: string;
+      targetVersion?: string;
+      releaseUrl?: string;
+      message?: string;
+      preferences?: {
+        includeBeta: boolean;
+        allowDowngrade: boolean;
+        allowAllVersions: boolean;
+      };
+    }>,
   installDownloadedAppUpdate: () =>
     ipcRenderer.invoke("install-downloaded-app-update") as Promise<boolean>,
   onAppUpdateDownloadProgress: (cb: (progress: {

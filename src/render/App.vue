@@ -18,10 +18,19 @@ const isDownloadingUpdate = ref(false)
 const downloadProgressPercent = ref(0)
 const isLoadingUpdatePreferences = ref(false)
 const isSavingUpdatePreferences = ref(false)
+const isLoadingDowngradeVersions = ref(false)
+const isPreparingVersionUpdate = ref(false)
 const includeBetaUpdates = ref(false)
 const allowDowngradeUpdates = ref(true)
 const allowAllVersionsUpdates = ref(false)
 const currentVersion = ref('')
+const downgradeVersionOptions = ref<Array<{
+  version: string;
+  releaseUrl: string;
+  channel: 'stable' | 'alpha' | 'beta' | 'rc';
+}>>([])
+const selectedDowngradeVersion = ref('')
+const hasShownDowngradeLoadMessage = ref(false)
 let stopRouteSync: (() => void) | undefined
 let stopTopToolbarSync: (() => void) | undefined
 let stopAppCloseSync: (() => void) | undefined
@@ -299,6 +308,8 @@ async function handleIncludeBetaPreferenceChange(value: string | number | boolea
   } finally {
     isSavingUpdatePreferences.value = false
   }
+
+  await loadDowngradeVersionOptions()
 }
 
 async function handleAllowDowngradePreferenceChange(value: string | number | boolean) {
@@ -327,6 +338,8 @@ async function handleAllowDowngradePreferenceChange(value: string | number | boo
   } finally {
     isSavingUpdatePreferences.value = false
   }
+
+  await loadDowngradeVersionOptions()
 }
 
 async function handleConsoleTitleDoubleClick() {
@@ -362,6 +375,85 @@ async function handleConsoleTitleDoubleClick() {
   } finally {
     isSavingUpdatePreferences.value = false
   }
+
+  await loadDowngradeVersionOptions()
+}
+
+async function loadDowngradeVersionOptions() {
+  if (!allowDowngradeUpdates.value) {
+    downgradeVersionOptions.value = []
+    selectedDowngradeVersion.value = ''
+    isLoadingDowngradeVersions.value = false
+    return
+  }
+
+  isLoadingDowngradeVersions.value = true
+  try {
+    const result = await window.electron.getDowngradeVersionOptions()
+    downgradeVersionOptions.value = result.versions
+
+    if (!result.versions.some(item => item.version === selectedDowngradeVersion.value)) {
+      selectedDowngradeVersion.value = result.versions[0]?.version ?? ''
+    }
+
+    if (result.message && result.versions.length === 0 && !hasShownDowngradeLoadMessage.value) {
+      hasShownDowngradeLoadMessage.value = true
+      await window.electron.showNativeDialog({
+        title: '降级版本列表',
+        message: result.message,
+        buttons: ['确定'],
+        type: 'info',
+      })
+    }
+  } catch {
+    downgradeVersionOptions.value = []
+    selectedDowngradeVersion.value = ''
+  } finally {
+    isLoadingDowngradeVersions.value = false
+  }
+}
+
+async function handleUpdateToSelectedVersion() {
+  if (isPreparingVersionUpdate.value) return
+  if (!selectedDowngradeVersion.value) {
+    await window.electron.showNativeDialog({
+      title: '请选择版本',
+      message: '请先选择需要更新到的目标版本。',
+      buttons: ['确定'],
+      type: 'info',
+    })
+    return
+  }
+
+  isPreparingVersionUpdate.value = true
+  try {
+    const result = await window.electron.prepareUpdateToVersion(selectedDowngradeVersion.value)
+
+    if (result.status === 'ready' && result.releaseUrl) {
+      const response = await window.electron.showNativeDialog({
+        title: '按版本更新',
+        message: `将打开版本 ${result.targetVersion ?? selectedDowngradeVersion.value} 的发布页进行更新，是否继续？`,
+        buttons: ['继续', '取消'],
+        type: 'question',
+        defaultId: 0,
+        cancelId: 1,
+      })
+
+      if (response === 0) {
+        await window.electron.openLink(result.releaseUrl)
+      }
+      return
+    }
+
+    await window.electron.showNativeDialog({
+      title: '按版本更新不可用',
+      message: result.message ?? '当前无法更新到所选版本。',
+      buttons: ['确定'],
+      type: result.status === 'error' ? 'error' : 'warning',
+    })
+  } finally {
+    isPreparingVersionUpdate.value = false
+  }
 }
 
 async function handleAppCloseRequested() {
@@ -395,6 +487,7 @@ onMounted(() => {
   })
 
   void loadUpdatePreferences()
+  void loadDowngradeVersionOptions()
 
   stopTopToolbarSync = window.electron.onTopToolbarVisibilityChanged((visible) => {
     showTopToolbar.value = visible
@@ -476,6 +569,20 @@ const navLinks = computed(() => {
             <el-switch :model-value="allowDowngradeUpdates" size="small"
               :loading="isLoadingUpdatePreferences || isSavingUpdatePreferences" inline-prompt active-text="开"
               inactive-text="关" @change="handleAllowDowngradePreferenceChange" />
+          </div>
+          <div v-if="link.to.includes('/help') && allowDowngradeUpdates" class="update-version-selector">
+            <el-select v-model="selectedDowngradeVersion" placeholder="选择降级版本" size="small"
+              :loading="isLoadingDowngradeVersions"
+              :disabled="isLoadingDowngradeVersions || isPreparingVersionUpdate || downgradeVersionOptions.length === 0"
+              style="width: 100%;">
+              <el-option v-for="item in downgradeVersionOptions" :key="item.version"
+                :label="`${item.version} (${item.channel})`" :value="item.version" />
+            </el-select>
+            <button type="button" class="update-action"
+              :disabled="isLoadingDowngradeVersions || isPreparingVersionUpdate || !selectedDowngradeVersion"
+              @click="handleUpdateToSelectedVersion">
+              {{ isPreparingVersionUpdate ? '准备更新中...' : '更新到所选版本' }}
+            </button>
           </div>
         </template>
       </nav>
@@ -656,6 +763,15 @@ const navLinks = computed(() => {
 .update-beta-toggle__label {
   font-size: 12px;
   color: #94a3b8;
+}
+
+.update-version-selector {
+  margin-top: -2px;
+  margin-bottom: 8px;
+  padding: 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .eyebrow {
