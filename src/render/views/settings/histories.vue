@@ -74,13 +74,13 @@ definePage({
 
 const getTxt = (ticket: TicketHistoryItem): "pfetst" | "pfestg" | "pfeprod" => {
 
-  if (ticket.result.record_link?.includes("pfetst")) {
+  if (ticket.result.ticket_link?.includes("pfetst")) {
     return "pfetst"
   }
-  if (ticket.result.record_link?.includes("pfestg")) {
+  if (ticket.result.ticket_link?.includes("pfestg")) {
     return "pfestg"
   }
-  if (ticket.result.record_link?.includes("pfeprod")) {
+  if (ticket.result.ticket_link?.includes("pfeprod")) {
     return "pfeprod"
   }
   return 'pfetst'
