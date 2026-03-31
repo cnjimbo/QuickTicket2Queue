@@ -408,14 +408,31 @@ jobs:
           $appProcess = Start-Process -FilePath $exe.FullName -PassThru
 
           try {
-            Start-Sleep -Seconds 10
+            $expectedWindowTitle = 'Quick Ticket to Queue'
+            $windowDetected = $false
 
-            $runningProcess = Get-Process -Id $appProcess.Id -ErrorAction SilentlyContinue
-            if (-not $runningProcess) {
-              throw 'unpacked 应用在启动后的观察窗口内已退出。'
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+              Start-Sleep -Seconds 2
+
+              $runningProcess = Get-Process -Id $appProcess.Id -ErrorAction SilentlyContinue
+              if (-not $runningProcess) {
+                throw 'unpacked 应用在主窗口出现前已退出。'
+              }
+
+              if ($runningProcess.MainWindowTitle -like "*$expectedWindowTitle*") {
+                $windowDetected = $true
+                Write-Host "[信息] 已检测到主窗口标题: $($runningProcess.MainWindowTitle)"
+                break
+              }
             }
 
-            Write-Host "[信息] 应用进程仍在运行，PID=$($runningProcess.Id)，通过 Windows 产物 smoke test。"
+            if (-not $windowDetected) {
+              $runningProcess = Get-Process -Id $appProcess.Id -ErrorAction SilentlyContinue
+              $currentWindowTitle = if ($runningProcess) { $runningProcess.MainWindowTitle } else { '' }
+              throw "未在预期时间内检测到主窗口标题。当前标题: $currentWindowTitle"
+            }
+
+            Write-Host '[信息] 应用主窗口已成功打开，通过 Windows 产物 smoke test。'
           }
           finally {
             $runningProcess = Get-Process -Id $appProcess.Id -ErrorAction SilentlyContinue
