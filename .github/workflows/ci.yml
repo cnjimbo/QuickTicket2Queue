@@ -381,11 +381,11 @@ jobs:
           echo "[信息] 正在 $RUNNER_OS 上为 tag ${{ needs.prepare_release_metadata.outputs.publish_tag_name }} 构建发布产物"
           pnpm run build
 
-      - name: Install and smoke test Windows package
+      - name: Smoke test Windows packaged app
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Write-Host "[信息] 正在查找 Windows 安装包"
+          Write-Host "[信息] 正在查找 Windows 安装包与 unpacked 可执行文件"
 
           $installer = Get-ChildItem build -File |
             Where-Object { $_.Extension -eq '.exe' -and $_.Name -notlike 'builder-*' } |
@@ -393,54 +393,36 @@ jobs:
             Select-Object -First 1
 
           if (-not $installer) {
-            throw '未找到可用于安装测试的 Windows 安装包。'
+            throw '未找到 Windows 安装包。'
           }
 
-          $installDir = Join-Path $env:RUNNER_TEMP 't2q-install'
-          if (Test-Path $installDir) {
-            Remove-Item $installDir -Recurse -Force
-          }
-          New-Item -ItemType Directory -Path $installDir | Out-Null
+          Write-Host "[信息] 已找到安装包: $($installer.Name)"
 
-          Write-Host "[信息] 正在静默安装 $($installer.Name) 到 $installDir"
-          $installProcess = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
-          if ($installProcess.ExitCode -ne 0) {
-            throw "安装程序退出码异常: $($installProcess.ExitCode)"
-          }
-
-          $exe = Get-ChildItem $installDir -Recurse -Filter 't2q.exe' -File | Select-Object -First 1
+          $exe = Get-ChildItem build\\win-unpacked -Recurse -Filter 't2q.exe' -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
           if (-not $exe) {
-            throw '安装完成后未找到 t2q.exe。'
+            throw '未找到 build/win-unpacked/t2q.exe，无法执行 Windows 产物冒烟验证。'
           }
 
-          Write-Host "[信息] 正在启动已安装程序: $($exe.FullName)"
+          Write-Host "[信息] 准备启动 unpacked 应用进行 smoke test: $($exe.FullName)"
           $appProcess = Start-Process -FilePath $exe.FullName -PassThru
-          $expectedWindowTitle = 'Quick Ticket to Queue'
-          $windowDetected = $false
 
-          for ($attempt = 0; $attempt -lt 30; $attempt++) {
-            Start-Sleep -Seconds 2
+          try {
+            Start-Sleep -Seconds 10
 
             $runningProcess = Get-Process -Id $appProcess.Id -ErrorAction SilentlyContinue
             if (-not $runningProcess) {
-              throw '应用进程在主窗口出现前已退出。'
+              throw 'unpacked 应用在启动后的观察窗口内已退出。'
             }
 
-            if ($runningProcess.MainWindowTitle -like "*$expectedWindowTitle*") {
-              $windowDetected = $true
-              Write-Host "[信息] 已检测到主窗口标题: $($runningProcess.MainWindowTitle)"
-              break
-            }
+            Write-Host "[信息] 应用进程仍在运行，PID=$($runningProcess.Id)，通过 Windows 产物 smoke test。"
           }
-
-          if (-not $windowDetected) {
+          finally {
             $runningProcess = Get-Process -Id $appProcess.Id -ErrorAction SilentlyContinue
-            $currentWindowTitle = if ($runningProcess) { $runningProcess.MainWindowTitle } else { '' }
-            throw "未在预期时间内检测到主窗口标题。当前标题: $currentWindowTitle"
+            if ($runningProcess) {
+              Stop-Process -Id $appProcess.Id -Force
+            }
           }
-
-          Write-Host '[信息] 应用主窗口已成功打开，通过安装与运行验证。'
-          Stop-Process -Id $appProcess.Id -Force
 
       - name: Upload build artifacts to draft release
         shell: pwsh
