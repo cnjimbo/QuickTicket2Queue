@@ -11,6 +11,8 @@ export const ipcInvoke = {
     ipcRenderer.invoke('add-ticket-option', ...args) as unknown as PreloadInvokeReturn<'add-ticket-option', true>,
   checkForAppUpdates: (...args: IpcInvokeArgs<'check-for-app-updates'>): PreloadInvokeReturn<'check-for-app-updates', true> =>
     ipcRenderer.invoke('check-for-app-updates', ...args) as unknown as PreloadInvokeReturn<'check-for-app-updates', true>,
+  checkTicketOptionsUpdatesFromGithub: (...args: IpcInvokeArgs<'check-ticket-options-updates-from-github'>): PreloadInvokeReturn<'check-ticket-options-updates-from-github', true> =>
+    ipcRenderer.invoke('check-ticket-options-updates-from-github', ...args) as unknown as PreloadInvokeReturn<'check-ticket-options-updates-from-github', true>,
   clearTicketHistory: (...args: IpcInvokeArgs<'clear-ticket-history'>): PreloadInvokeReturn<'clear-ticket-history', true> =>
     ipcRenderer.invoke('clear-ticket-history', ...args) as unknown as PreloadInvokeReturn<'clear-ticket-history', true>,
   clearCredential: (...args: IpcInvokeArgs<'clearCredential'>): PreloadInvokeReturn<'clearCredential', true> =>

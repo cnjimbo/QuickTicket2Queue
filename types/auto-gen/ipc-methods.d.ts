@@ -11,6 +11,10 @@ export interface IpcInvokeMap {
     params: []
     return: Promise<ManualUpdateResult>
   }
+  'check-ticket-options-updates-from-github': {
+    params: []
+    return: Promise<{ hasUpdates: boolean; updateCount: number; }>
+  }
   'clear-ticket-history': {
     params: []
     return: Promise<void>

@@ -76,4 +76,9 @@ export class AppControllerTicket {
   public async syncTicketOptionsFromGithub(@Payload() mode: "merge" | "overwrite"): Promise<TicketQueueOption[]> {
     return await this.store.syncTicketOptionsFromGithub(mode);
   }
+
+  @IpcHandle("check-ticket-options-updates-from-github")
+  public async checkTicketOptionsUpdatesFromGithub(): Promise<{ hasUpdates: boolean, updateCount: number }> {
+    return await this.store.checkTicketOptionsUpdatesFromGithub();
+  }
 }

@@ -52,7 +52,7 @@
 
 <script setup lang="ts">
 import { refAutoReset, useAsyncState } from '@vueuse/core'
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveDefaultTicketPath } from '@render/utils/default-ticket-path'
 import type { TicketQueueOption } from '@/types/orm_types'
@@ -83,6 +83,11 @@ const { isLoading: adding, execute: executeAddOption } = useAsyncState(
 const { isLoading: syncing, execute: executeSyncOptions } = useAsyncState(
     (mode: SyncMode) => window.electron.syncTicketOptionsFromGithub(mode),
     undefined,
+    { immediate: false, resetOnExecute: false, throwError: true },
+)
+const { execute: executeCheckOptionsUpdates } = useAsyncState(
+    () => window.electron.checkTicketOptionsUpdatesFromGithub(),
+    { hasUpdates: false, updateCount: 0 },
     { immediate: false, resetOnExecute: false, throwError: true },
 )
 const { isLoading: resetting, execute: executeResetOptions } = useAsyncState(
@@ -187,27 +192,34 @@ const syncFromGithub = async (mode: SyncMode) => {
     }
 }
 
-const handleSyncFromGithub = () => {
-    void (async () => {
-        const response = await showNativeDialog({
-            title: '同步 GitHub 默认配置',
-            message: '请选择同步策略：覆盖当前会完全替换本地列表；合并到当前只会补充缺失队列。',
-            buttons: ['合并到当前', '覆盖当前', '取消'],
-            type: 'question',
-            defaultId: 0,
-            cancelId: 2,
-            noLink: true,
-        })
+const handleSyncFromGithub = async () => {
+    await syncFromGithub('merge')
+}
 
-        if (response === 0) {
-            await syncFromGithub('merge')
+const checkQueueUpdatesFromGithub = async () => {
+    try {
+        const result = await executeCheckOptionsUpdates(0)
+        if (!result?.hasUpdates) {
             return
         }
 
-        if (response === 1) {
-            await syncFromGithub('overwrite')
+        const shouldSync = await showNativeDialog({
+            title: '检测到远程队列更新',
+            message: `检测到 GitHub 默认配置有 ${result.updateCount} 条新队列，是否拉取并合并到当前列表？`,
+            buttons: ['拉取更新', '取消'],
+            type: 'question',
+            defaultId: 0,
+            cancelId: 1,
+            noLink: true,
+        })
+
+        if (shouldSync === 0) {
+            await syncFromGithub('merge')
         }
-    })()
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '自动检查队列更新失败，请稍后重试'
+        showNotice('error', message)
+    }
 }
 
 const handleSuggestDefaultQueue = () => {
@@ -224,6 +236,10 @@ const jumpToTicket = async (queue: string) => {
         },
     })
 }
+
+onMounted(() => {
+    void checkQueueUpdatesFromGithub()
+})
 
 </script>
 
