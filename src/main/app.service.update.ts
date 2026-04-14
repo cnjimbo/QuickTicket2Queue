@@ -61,10 +61,8 @@ type ParsedAppVersion = {
     sequence?: number;
 };
 
-const APP_PRERELEASE_VERSION_PATTERN = /^v?\d+\.\d+\.\d+-(alpha|beta|rc)(?:\.\d+)?$/;
-const APP_STABLE_VERSION_PATTERN = /^v?\d+\.\d+\.\d+$/;
-const APP_STABLE_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
-const APP_PRERELEASE_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)(?:\.(\d+))?$/;
+const APP_VERSION_CAPTURE_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
+const APP_SUPPORTED_PRERELEASE_CAPTURE_PATTERN = /^(alpha|beta|rc)(?:[.-]?(\d+))?$/;
 const APP_PRERELEASE_CHANNEL_WEIGHT: Record<AppPrereleaseChannel, number> = {
     alpha: 0,
     beta: 1,
@@ -121,50 +119,53 @@ export class AppServiceUpdate {
     }
 
     private isAllowedUpdateVersion(version: string, preferences: UpdatePreferences): boolean {
-        const normalizedVersion = this.normalizeAppVersion(version);
-
-        if (APP_STABLE_VERSION_PATTERN.test(normalizedVersion)) {
-            return true;
-        }
-
-        const prereleaseChannel = APP_PRERELEASE_VERSION_PATTERN.exec(normalizedVersion)?.[1] as AppPrereleaseChannel | undefined;
-        if (!prereleaseChannel) {
+        const parsedVersion = this.parseAppVersion(version);
+        if (!parsedVersion) {
             return false;
         }
 
+        if (!parsedVersion.channel) {
+            return true;
+        }
+
         if (preferences.allowAllVersions) {
-            return prereleaseChannel === "alpha" || prereleaseChannel === "beta" || prereleaseChannel === "rc";
+            return true;
         }
 
         if (!preferences.includeBeta) {
             return false;
         }
 
-        return prereleaseChannel === "rc";
+        return parsedVersion.channel === "rc";
     }
 
     private parseAppVersion(version: string): ParsedAppVersion | null {
-        const normalizedVersion = this.normalizeAppVersion(version);
-        const stableMatch = APP_STABLE_VERSION_CAPTURE_PATTERN.exec(normalizedVersion);
-        if (stableMatch) {
+        const normalizedVersion = this.normalizeAppVersion(version).toLowerCase();
+        const versionMatch = APP_VERSION_CAPTURE_PATTERN.exec(normalizedVersion);
+        if (!versionMatch) {
+            return null;
+        }
+
+        const prereleaseTag = versionMatch[4];
+        if (!prereleaseTag) {
             return {
-                major: Number(stableMatch[1]),
-                minor: Number(stableMatch[2]),
-                patch: Number(stableMatch[3]),
+                major: Number(versionMatch[1]),
+                minor: Number(versionMatch[2]),
+                patch: Number(versionMatch[3]),
             };
         }
 
-        const prereleaseMatch = APP_PRERELEASE_VERSION_CAPTURE_PATTERN.exec(normalizedVersion);
+        const prereleaseMatch = APP_SUPPORTED_PRERELEASE_CAPTURE_PATTERN.exec(prereleaseTag);
         if (!prereleaseMatch) {
             return null;
         }
 
         return {
-            major: Number(prereleaseMatch[1]),
-            minor: Number(prereleaseMatch[2]),
-            patch: Number(prereleaseMatch[3]),
-            channel: prereleaseMatch[4] as AppPrereleaseChannel,
-            sequence: Number(prereleaseMatch[5] ?? 0),
+            major: Number(versionMatch[1]),
+            minor: Number(versionMatch[2]),
+            patch: Number(versionMatch[3]),
+            channel: prereleaseMatch[1] as AppPrereleaseChannel,
+            sequence: Number(prereleaseMatch[2] ?? 0),
         };
     }
 
