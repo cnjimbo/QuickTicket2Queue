@@ -16,7 +16,12 @@ export const useCredentialStore = defineStore('credential', {
 
     getters: {
         currentKey(): CredentialItem['env'] | undefined {
-            return this.tableData.find((r) => r.isCurrent)?.env ?? this.tableData[0]?.env ?? undefined
+            return (
+                this.tableData.find((r) => r.isCurrent)?.env
+                ?? this.tableData.find((r) => r.env === 'pfeprod')?.env
+                ?? this.tableData[0]?.env
+                ?? undefined
+            )
         }
     },
 

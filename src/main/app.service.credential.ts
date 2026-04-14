@@ -19,7 +19,7 @@ export class AppServiceCredential {
             client_secret: "",
             client_id: "",
             sn_host: "https://pfetst.service-now.com",
-            isCurrent: true,
+            isCurrent: false,
             editing: false,
             env: 'pfetst'
         },
@@ -36,7 +36,7 @@ export class AppServiceCredential {
             client_secret: "",
             client_id: "",
             sn_host: "https://pfeprod.service-now.com",
-            isCurrent: false,
+            isCurrent: true,
             editing: false,
         },
     ];
@@ -99,7 +99,7 @@ export class AppServiceCredential {
         const all = await this.read();
         const v =
             all.find((i) => i.isCurrent) ??
-            all.find((i) => i.env == 'pfetst');
+            all.find((i) => i.env == 'pfeprod');
         return v!;
     }
 }
