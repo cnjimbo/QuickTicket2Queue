@@ -7,14 +7,20 @@
   </Teleport>
 
   <div class="toolbar">
-    <el-text>共 {{ tableData.length }} 组凭据</el-text>
+    <el-text>共 {{ visibleTableData.length }} 组凭据</el-text>
     <div class="toolbar-actions">
+      <el-switch
+        v-model="showAllEnvs"
+        inline-prompt
+        active-text="全部环境"
+        inactive-text="仅生产"
+      />
       <el-button type="primary" :disabled="!hasChanges" @click="handleSaveAll">保存</el-button>
       <el-button type="danger" :disabled="tableData.length === 0" @click="handleClear">清空凭据</el-button>
     </div>
   </div>
 
-  <el-table :data="tableData" border row-key="env" table-layout="auto">
+  <el-table :data="visibleTableData" border row-key="env" table-layout="auto">
     <el-table-column label="当前" width="100">
       <template #default="{ row }">
         <el-radio :model-value="currentKey" :label="row.env" @change="() => setCurrent(row.env)">
@@ -79,6 +85,7 @@ const { handleEdit, setCurrent } = store
 
 const successVisible = refAutoReset(false, 2500)
 const baselineSnapshot = ref('')
+const showAllEnvs = ref(false)
 
 const snapshotTable = (rows: CredentialItem[]): string => {
   return JSON.stringify(rows.map((row) => ({
@@ -91,6 +98,11 @@ const snapshotTable = (rows: CredentialItem[]): string => {
 }
 
 const hasChanges = computed(() => snapshotTable(tableData.value) !== baselineSnapshot.value)
+const visibleTableData = computed(() => (
+  showAllEnvs.value
+    ? tableData.value
+    : tableData.value.filter((row) => row.env === 'pfeprod')
+))
 
 const syncBaseline = () => {
   baselineSnapshot.value = snapshotTable(tableData.value)

@@ -1,33 +1,41 @@
 {
-    "$schema": "./ticket-options.schema.json",
-    "items": [
-        {
-            "des": "域名申请、解析",
-            "queue": "GBL-NETWORK DDI"
-        },
-        {
-            "des": "China Support/update L1 KB",
-            "queue": "CHN-WPO-APP SUPPORT"
-        },
-        {
-            "des": "本地应用运维",
-            "queue": "CHN-LOCAL APP DEVOPS"
-        },
-        {
-            "des": "China IICS Platform Support Queue and DL",
-            "queue": "CHN-IICS PLATFORM SUPPORT"
-        },
-        {
-            "des": "CHN-DEP NG APPROVAL",
-            "queue": "CHN-DEP NG APPROVAL"
-        },
-        {
-            "des": "VPN相关问题",
-            "queue": "GBL-NETWORK VPN"
-        },
-        {
-            "des": "中国AWS infra support",
-            "queue": "GBL-CHINA HOSTING OPS SUPPORT"
-        }
-    ]
+  "$schema": "./ticket-options.schema.json",
+  "items": [
+    {
+      "des": "域名申请、解析",
+      "queue": "GBL-NETWORK DDI"
+    },
+    {
+      "des": "China Support/update L1 KB",
+      "queue": "CHN-WPO-APP SUPPORT"
+    },
+    {
+      "des": "微信相关问题 2",
+      "queue": "CHN-APP WECHAT SUPPORT L2"
+    },
+    {
+      "des": "微信相关问题 1",
+      "queue": "CHN-APP WECHAT SUPPORT L1"
+    },
+    {
+      "des": "本地应用运维",
+      "queue": "CHN-LOCAL APP DEVOPS"
+    },
+    {
+      "des": "China IICS Platform Support Queue and DL",
+      "queue": "CHN-IICS PLATFORM SUPPORT"
+    },
+    {
+      "des": "CHN-DEP NG APPROVAL",
+      "queue": "CHN-DEP NG APPROVAL"
+    },
+    {
+      "des": "VPN相关问题",
+      "queue": "GBL-NETWORK VPN"
+    },
+    {
+      "des": "中国AWS infra support",
+      "queue": "GBL-CHINA HOSTING OPS SUPPORT"
+    }
+  ]
 }

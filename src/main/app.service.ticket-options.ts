@@ -14,6 +14,7 @@ const GITHUB_TICKET_OPTIONS_FALLBACK_URLS = [
 const FETCH_TIMEOUT_MS = 15000;
 
 export type TicketOptionsSyncMode = "merge" | "overwrite";
+type TicketOptionsUpdateCheckResult = { hasUpdates: boolean, updateCount: number };
 
 function cloneOptions(options: TicketQueueOption[]): TicketQueueOption[] {
     return options.map((item) => ({ ...item }));
@@ -51,6 +52,11 @@ function mergeByQueue(current: TicketQueueOption[], incoming: TicketQueueOption[
     const existingQueues = new Set(current.map((item) => item.queue));
     const toAppend = incoming.filter((item) => !existingQueues.has(item.queue));
     return [...current, ...toAppend];
+}
+
+function countMissingQueues(current: TicketQueueOption[], incoming: TicketQueueOption[]): number {
+    const existingQueues = new Set(current.map((item) => item.queue));
+    return incoming.filter((item) => !existingQueues.has(item.queue)).length;
 }
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
@@ -172,5 +178,16 @@ export class AppServiceTicketOptions {
 
         await this.setTicketOptions(nextOptions);
         return nextOptions;
+    }
+
+    public async checkForGithubUpdates(): Promise<TicketOptionsUpdateCheckResult> {
+        const rawText = await fetchRemoteTicketOptionsRawJson(this.http);
+        const remoteOptions = loadOptionsFromRawJson(rawText);
+        const updateCount = countMissingQueues(await this.get(), remoteOptions);
+
+        return {
+            hasUpdates: updateCount > 0,
+            updateCount,
+        };
     }
 }

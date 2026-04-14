@@ -62,4 +62,8 @@ export class AppServiceStore {
   public async syncTicketOptionsFromGithub(mode: TicketOptionsSyncMode): Promise<TicketQueueOption[]> {
     return this.ticketOptionsService.syncFromGithub(mode);
   }
+
+  public async checkTicketOptionsUpdatesFromGithub(): Promise<{ hasUpdates: boolean, updateCount: number }> {
+    return this.ticketOptionsService.checkForGithubUpdates();
+  }
 }

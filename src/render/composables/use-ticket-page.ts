@@ -9,7 +9,7 @@ import type { CredentialItem, TicketQueueOption } from '@/types/orm_types'
 import { getDraftLeaveDecision } from '@render/utils/draft-leave-confirm'
 
 const defaultCurrent: CredentialItem = {
-    env: 'pfetst',
+    env: 'pfeprod',
 }
 
 function applyQueueFromRouteParam(ticketStore: ReturnType<typeof useTicketStore>, rawQueue: string | null) {
