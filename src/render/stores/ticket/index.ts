@@ -1,7 +1,6 @@
 import { defineStore } from "pinia";
 import {
   StorageSerializers,
-  useAsyncState,
   useSessionStorage,
   useStorage,
 } from "@vueuse/core";
@@ -10,6 +9,7 @@ import { computed, reactive, ref, toRaw } from "vue";
 
 export const fieldLabels = {
   userName: "工单提交人",
+  requestFor: "Request For",
   title: "工单简要标题",
   content: "工单详细描述",
   queue_val: "队列",
@@ -20,6 +20,7 @@ type ValidationMessages = Record<FieldKey, string>;
 
 const createEmptyValidationMessages = (): ValidationMessages => ({
   userName: "",
+  requestFor: "",
   title: "",
   content: "",
   queue_val: "",
@@ -29,13 +30,27 @@ const requiredFields: FieldKey[] = ["userName", "title", "content"];
 const TICKET_DRAFT_STORAGE_KEY = "quickticket2queue:ticket-draft:v1";
 const HISTORY_COPY_PAYLOAD_KEY = "quickticket2queue:history-copy-payload:v1";
 
-type TicketDraftCache = Pick<TicketType, "title" | "content" | "queue_val">;
+type TicketDraftCache = Pick<TicketType, "requestFor" | "title" | "content" | "queue_val">;
 
 const createEmptyDraft = (): TicketDraftCache => ({
+  requestFor: "",
   title: "",
   content: "",
   queue_val: "",
 });
+
+function getSubmitErrorMessage(error: unknown, fallback: string) {
+  const rawMessage = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
+
+  return rawMessage
+    .replace(/^Error invoking remote method '[^']+':\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .trim() || fallback;
+}
 
 export const useTicketStore = defineStore("ticket", () => {
   const ticket = reactive<TicketType>({
@@ -43,6 +58,7 @@ export const useTicketStore = defineStore("ticket", () => {
     content: "",
     queue_val: "",
     userName: "",
+    requestFor: "",
   } as TicketType);
   const validationMessages = reactive<ValidationMessages>(
     createEmptyValidationMessages(),
@@ -60,16 +76,8 @@ export const useTicketStore = defineStore("ticket", () => {
     createEmptyDraft(),
     localStorage,
   );
-  const { execute: executeSubmitTicket, isLoading: isSubmitting } = useAsyncState(
-    (payload: TicketType) => window.electron.ticket(payload),
-    undefined as TicketResponse | undefined,
-    { immediate: false, resetOnExecute: false },
-  );
-  const { execute: executeSubmitInternalTicket, isLoading: isSubmittingInternalTicket } = useAsyncState(
-    (payload: TicketType) => window.electron.internalTicket(payload),
-    undefined as TicketResponse | undefined,
-    { immediate: false, resetOnExecute: false },
-  );
+  const isSubmitting = ref(false);
+  const isSubmittingInternalTicket = ref(false);
 
   const isFormValid = computed(() =>
     requiredFields.every((field) => (ticket[field] ?? "").trim().length > 0),
@@ -87,6 +95,7 @@ export const useTicketStore = defineStore("ticket", () => {
   };
 
   const getTicketDraftSnapshot = (): TicketDraftCache => ({
+    requestFor: ticket.requestFor ?? "",
     title: ticket.title ?? "",
     content: ticket.content ?? "",
     queue_val: ticket.queue_val ?? "",
@@ -105,6 +114,9 @@ export const useTicketStore = defineStore("ticket", () => {
     if (typeof fields.userName === "string") {
       ticket.userName = fields.userName;
     }
+    if (typeof fields.requestFor === "string") {
+      ticket.requestFor = fields.requestFor;
+    }
     if (typeof fields.title === "string") {
       ticket.title = fields.title;
     }
@@ -121,6 +133,8 @@ export const useTicketStore = defineStore("ticket", () => {
     historyCopyPayload.value = {
       userName:
         typeof fields.userName === "string" ? fields.userName : undefined,
+      requestFor:
+        typeof fields.requestFor === "string" ? fields.requestFor : undefined,
       title: typeof fields.title === "string" ? fields.title : undefined,
       content: typeof fields.content === "string" ? fields.content : undefined,
       queue_val:
@@ -140,6 +154,7 @@ export const useTicketStore = defineStore("ticket", () => {
 
     ticket.title = draft.title;
     ticket.content = draft.content;
+    ticket.requestFor = draft.requestFor ?? "";
     if (!ticket.queue_val?.trim()) {
       ticket.queue_val = draft.queue_val;
     }
@@ -147,6 +162,7 @@ export const useTicketStore = defineStore("ticket", () => {
 
   const clearTicketDraft = () => {
     const empty = createEmptyDraft();
+    ticket.requestFor = empty.requestFor;
     ticket.title = empty.title;
     ticket.content = empty.content;
     ticket.queue_val = empty.queue_val;
@@ -181,12 +197,13 @@ export const useTicketStore = defineStore("ticket", () => {
       const payload = toRaw(ticket);
       saveTicketDraft();
 
-      const res = await executeSubmitTicket(0, payload);
+      isSubmitting.value = true;
+      const res = await window.electron.ticket(payload);
       setResult(res);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "提交失败，请稍后重试";
-      return message;
+      return getSubmitErrorMessage(error, "提交失败，请稍后重试");
+    } finally {
+      isSubmitting.value = false;
     }
 
     return undefined;
@@ -203,12 +220,13 @@ export const useTicketStore = defineStore("ticket", () => {
       const payload = toRaw(ticket);
       saveTicketDraft();
 
-      const res = await executeSubmitInternalTicket(0, payload);
+      isSubmittingInternalTicket.value = true;
+      const res = await window.electron.internalTicket(payload);
       setResult(res);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "通过网页登录态提交失败，请稍后重试";
-      return message;
+      return getSubmitErrorMessage(error, "通过网页登录态提交失败，请稍后重试");
+    } finally {
+      isSubmittingInternalTicket.value = false;
     }
 
     return undefined;

@@ -94,26 +94,6 @@ export function getBranchVersionPolicy(branchName: string): BranchVersionPolicy 
     };
 }
 
-export function getHookSyncTargetChannel(branchName: string): AppReleaseChannel {
-    if (branchName === "main") {
-        return "stable";
-    }
-
-    if (branchName.startsWith("release/")) {
-        return "rc";
-    }
-
-    if (branchName.startsWith("develop/")) {
-        return "beta";
-    }
-
-    if (branchName.startsWith("feature/")) {
-        return "alpha";
-    }
-
-    return "alpha";
-}
-
 export function detectTargetReleaseChannel(branchName: string): AppReleaseChannel | null {
     const policy = getBranchVersionPolicy(branchName);
     if (!policy.enforce) {

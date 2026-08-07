@@ -29,12 +29,24 @@ function applyQueueFromRouteParam(ticketStore: ReturnType<typeof useTicketStore>
     ticketStore.setTicketField('queue_val', normalizedQueue)
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+    if (!(error instanceof Error)) {
+        return fallback
+    }
+
+    return error.message
+        .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+        .replace(/^Error:\s*/i, '')
+        .trim() || fallback
+}
+
 export function useTicketPage() {
     const electron = window.electron
     const router = useRouter()
     const queueQuery = useRouteQuery<string | null>('queue', null)
     const fromHistoryCopyQuery = useRouteQuery<string | null>('fromHistoryCopy', null)
     const copyUserNameQuery = useRouteQuery<string | null>('copyUserName', null)
+    const copyRequestForQuery = useRouteQuery<string | null>('copyRequestFor', null)
     const copyTitleQuery = useRouteQuery<string | null>('copyTitle', null)
     const copyContentQuery = useRouteQuery<string | null>('copyContent', null)
     const copyQueueValQuery = useRouteQuery<string | null>('copyQueueVal', null)
@@ -84,7 +96,7 @@ export function useTicketPage() {
                 href: `${current.value.sn_host}/now/sow/home`,
             },
     )
-    const submitErrorMessage = refAutoReset('', 2500)
+    const submitErrorMessage = refAutoReset('', 10000)
 
     function readQueueFromRoute() {
         const queryQueue = queueQuery.value
@@ -100,7 +112,13 @@ export function useTicketPage() {
     }
 
     async function submitWith(submitAction: () => Promise<string | undefined>) {
-        const errorMessage = await submitAction()
+        let errorMessage: string | undefined
+        try {
+            errorMessage = await submitAction()
+        } catch (error) {
+            errorMessage = getErrorMessage(error, '提交失败，请稍后重试')
+        }
+
         if (errorMessage) {
             showSubmitError(errorMessage)
             return
@@ -137,12 +155,14 @@ export function useTicketPage() {
             }
 
             const copyUserName = copyUserNameQuery.value?.trim() ?? ''
+            const copyRequestFor = copyRequestForQuery.value?.trim() ?? ''
             const copyTitle = copyTitleQuery.value?.trim() ?? ''
             const copyContent = copyContentQuery.value ?? ''
             const copyQueueVal = copyQueueValQuery.value?.trim() ?? ''
 
             ticketStore.setTicketFieldsWithoutDraft({
                 userName: copyUserName,
+                requestFor: copyRequestFor,
                 title: copyTitle,
                 content: copyContent,
                 queue_val: copyQueueVal,

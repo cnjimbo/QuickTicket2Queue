@@ -1,8 +1,0 @@
-#!/bin/sh
-set -e
-
-# post-checkout args: <previous HEAD> <new HEAD> <isBranchCheckout>
-# Run on branch checkout/switch, including `git switch -c` and `git checkout -b`.
-if [ "$3" = "1" ]; then
-  "$(dirname "$0")/scripts/sync-app-version.sh"
-fi

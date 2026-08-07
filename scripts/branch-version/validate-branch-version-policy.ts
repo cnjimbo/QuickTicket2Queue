@@ -35,7 +35,7 @@ function emitValidationStatus(status: ValidationStatus, policyEnforced: boolean,
 
 function fail(message: string): never {
     emitValidationStatus("failed", true, false, "none");
-    console.error(`[hook] 校验失败：${message}`);
+    console.error(`[version-policy] 校验失败：${message}`);
     process.exit(1);
 }
 
@@ -105,7 +105,7 @@ function main(): void {
 
     if (!policy.enforce) {
         emitValidationStatus("skipped", false, false, "none");
-        console.log(`[hook] branch policy check skipped: ${branchName} is unrestricted, version=${currentVersion}`);
+        console.log(`[version-policy] branch policy check skipped: ${branchName} is unrestricted, version=${currentVersion}`);
         return;
     }
 

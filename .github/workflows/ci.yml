@@ -6,20 +6,20 @@ on:
   workflow_dispatch:
     inputs:
       publish_branch:
-        description: "Manual input: branch name to release from (example: main or release/26.3.4)"
+        description: 'Manual input: branch name to release from (example: main or release/26.3.4)'
         required: true
       publish_commit:
-        description: "Manual input (optional): commit SHA; find via `git log --oneline -n 20` or GitHub commit page"
+        description: 'Manual input (optional): commit SHA; find via `git log --oneline -n 20` or GitHub commit page'
         required: false
-        default: ""
+        default: ''
       force_release:
-        description: "Force release for non-alpha/beta versions (stable/rc)"
+        description: 'Force release for non-alpha/beta versions (stable/rc)'
         required: false
-        default: "false"
+        default: 'false'
         type: choice
         options:
-          - "false"
-          - "true"
+          - 'false'
+          - 'true'
 
 concurrency:
   group: ${{ github.workflow }}-branch-${{ github.event.inputs.publish_branch || github.head_ref || github.ref_name }}
@@ -151,7 +151,7 @@ jobs:
           fi
 
           set +e
-          VALIDATION_OUTPUT=$(VALIDATION_OUTPUT_FORMAT=github BRANCH_NAME_OVERRIDE="$BRANCH_NAME" APP_VERSION_OVERRIDE="$CURRENT_VERSION" npx --yes tsx .husky/scripts/validate-branch-version-policy.ts 2>&1)
+          VALIDATION_OUTPUT=$(VALIDATION_OUTPUT_FORMAT=github BRANCH_NAME_OVERRIDE="$BRANCH_NAME" APP_VERSION_OVERRIDE="$CURRENT_VERSION" npx --yes tsx scripts/branch-version/validate-branch-version-policy.ts 2>&1)
           VALIDATION_EXIT=$?
           set -e
 
@@ -372,7 +372,7 @@ jobs:
 
       - name: Build release artifacts
         env:
-          ELECTRON_BUILDER_RELEASE_BUILD: "true"
+          ELECTRON_BUILDER_RELEASE_BUILD: 'true'
           ELECTRON_BUILDER_TAG_NAME_PREFIX: ${{ needs.prepare_release_metadata.outputs.publish_tag_prefix }}
           ELECTRON_BUILDER_ARTIFACT_COMMIT: ${{ needs.prepare_release_metadata.outputs.target_sha }}
           GITHUB_REF_NAME: ${{ needs.prepare_release_metadata.outputs.publish_tag_name }}
@@ -462,8 +462,7 @@ jobs:
           gh release upload $env:PUBLISH_TAG_NAME @files --clobber
 
   publish_release:
-    needs:
-      [read_package_version, prepare_release_metadata, build_release_artifacts]
+    needs: [read_package_version, prepare_release_metadata, build_release_artifacts]
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.prepare_release_metadata.outputs.released == 'true'
     concurrency:
@@ -558,13 +557,7 @@ jobs:
           fi
 
   cleanup_failed_release:
-    needs:
-      [
-        read_package_version,
-        prepare_release_metadata,
-        build_release_artifacts,
-        publish_release,
-      ]
+    needs: [read_package_version, prepare_release_metadata, build_release_artifacts, publish_release]
     runs-on: ubuntu-latest
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.prepare_release_metadata.outputs.publish_tag_name != '' && (needs.prepare_release_metadata.result != 'success' || needs.build_release_artifacts.result != 'success' || needs.publish_release.result != 'success')
     concurrency:
