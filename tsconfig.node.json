@@ -1,7 +1,7 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "files": [
-    ".husky/scripts/app-version.ts"
+    "scripts/branch-version/app-version.ts"
   ],
   "include": [
     "**/*.d.ts",
