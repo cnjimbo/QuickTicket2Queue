@@ -237,6 +237,13 @@
     transform: translateX(-50%);
     z-index: 9999;
     min-width: 300px;
+    max-width: min(760px, calc(100vw - 32px));
+  }
+
+  .global-toast :deep(.el-alert__title) {
+    line-height: 1.5;
+    white-space: normal;
+    word-break: break-word;
   }
 
   .field-error {

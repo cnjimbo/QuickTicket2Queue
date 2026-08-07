@@ -1,7 +1,6 @@
 import { defineStore } from "pinia";
 import {
   StorageSerializers,
-  useAsyncState,
   useSessionStorage,
   useStorage,
 } from "@vueuse/core";
@@ -40,6 +39,19 @@ const createEmptyDraft = (): TicketDraftCache => ({
   queue_val: "",
 });
 
+function getSubmitErrorMessage(error: unknown, fallback: string) {
+  const rawMessage = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
+
+  return rawMessage
+    .replace(/^Error invoking remote method '[^']+':\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .trim() || fallback;
+}
+
 export const useTicketStore = defineStore("ticket", () => {
   const ticket = reactive<TicketType>({
     title: "",
@@ -64,16 +76,8 @@ export const useTicketStore = defineStore("ticket", () => {
     createEmptyDraft(),
     localStorage,
   );
-  const { execute: executeSubmitTicket, isLoading: isSubmitting } = useAsyncState(
-    (payload: TicketType) => window.electron.ticket(payload),
-    undefined as TicketResponse | undefined,
-    { immediate: false, resetOnExecute: false },
-  );
-  const { execute: executeSubmitInternalTicket, isLoading: isSubmittingInternalTicket } = useAsyncState(
-    (payload: TicketType) => window.electron.internalTicket(payload),
-    undefined as TicketResponse | undefined,
-    { immediate: false, resetOnExecute: false },
-  );
+  const isSubmitting = ref(false);
+  const isSubmittingInternalTicket = ref(false);
 
   const isFormValid = computed(() =>
     requiredFields.every((field) => (ticket[field] ?? "").trim().length > 0),
@@ -193,12 +197,13 @@ export const useTicketStore = defineStore("ticket", () => {
       const payload = toRaw(ticket);
       saveTicketDraft();
 
-      const res = await executeSubmitTicket(0, payload);
+      isSubmitting.value = true;
+      const res = await window.electron.ticket(payload);
       setResult(res);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "提交失败，请稍后重试";
-      return message;
+      return getSubmitErrorMessage(error, "提交失败，请稍后重试");
+    } finally {
+      isSubmitting.value = false;
     }
 
     return undefined;
@@ -215,12 +220,13 @@ export const useTicketStore = defineStore("ticket", () => {
       const payload = toRaw(ticket);
       saveTicketDraft();
 
-      const res = await executeSubmitInternalTicket(0, payload);
+      isSubmittingInternalTicket.value = true;
+      const res = await window.electron.internalTicket(payload);
       setResult(res);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "通过网页登录态提交失败，请稍后重试";
-      return message;
+      return getSubmitErrorMessage(error, "通过网页登录态提交失败，请稍后重试");
+    } finally {
+      isSubmittingInternalTicket.value = false;
     }
 
     return undefined;
