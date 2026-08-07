@@ -5,7 +5,6 @@ import type {
   TicketResponse,
   TicketType,
 } from "@/types/orm_types";
-import { AppServiceOS } from "./app.service.os";
 import { AppServiceStore } from "./app.service.store";
 import { AppServiceHttp } from "./app.service.http";
 
@@ -28,6 +27,13 @@ type ServiceNowTableIncidentResponse = {
   };
 };
 
+type ServiceNowIncidentLookupResponse = {
+  result?: {
+    sys_id?: unknown;
+    number?: unknown;
+  };
+};
+
 function readServiceNowFieldAsString(value: unknown): string {
   if (typeof value === "string") {
     return value;
@@ -46,10 +52,22 @@ function readServiceNowFieldAsString(value: unknown): string {
   return "";
 }
 
+function readIncidentSysIdFromResult(result: TicketResponse["result"][number]) {
+  const recordLinkMatch = result.record_link?.match(/\/incident\/([^/?#]+)/i);
+  if (recordLinkMatch?.[1]) {
+    return recordLinkMatch[1];
+  }
+
+  if (result.sys_id) {
+    return result.sys_id;
+  }
+
+  return "";
+}
+
 @Injectable()
 export class AppServiceTicket {
   public constructor(
-    private readonly appServiceOS: AppServiceOS,
     private readonly store: AppServiceStore,
     private readonly http: AppServiceHttp,
   ) { }
@@ -74,10 +92,19 @@ export class AppServiceTicket {
     return token;
   }
 
+  private resolveRequestBy(userInput: TicketType) {
+    return userInput.userName?.trim() ?? "";
+  }
+
+  private resolveRequestFor(userInput: TicketType) {
+    const requestFor = userInput.requestFor?.trim();
+    return requestFor || this.resolveRequestBy(userInput);
+  }
+
   private buildTicketPayload(userInput: TicketType) {
     return {
-      u_caller_id: this.appServiceOS.getUserName(),
-      u_pfe_requested_by: userInput.userName,
+      u_caller_id: this.resolveRequestFor(userInput),
+      u_pfe_requested_by: this.resolveRequestBy(userInput),
       u_short_description: userInput.title,
       u_assignment_group: userInput.queue_val,
       u_description: userInput.content,
@@ -93,8 +120,8 @@ export class AppServiceTicket {
 
   private buildIncidentTablePayload(userInput: TicketType) {
     return {
-      caller_id: this.appServiceOS.getUserName(),
-      u_pfe_requested_by: userInput.userName,
+      caller_id: this.resolveRequestFor(userInput),
+      u_pfe_requested_by: this.resolveRequestBy(userInput),
       short_description: userInput.title,
       assignment_group: userInput.queue_val,
       description: userInput.content,
@@ -177,6 +204,41 @@ export class AppServiceTicket {
     }
   }
 
+  private async enrichTicketResponseWithIncidentNumber(res: TicketResponse, token: string, host: string) {
+    if (!res?.result?.length) {
+      return res;
+    }
+
+    for (const result of res.result) {
+      const sysId = readIncidentSysIdFromResult(result);
+      if (!sysId) continue;
+
+      try {
+        const incident = await this.http.httpGetWithHeaders<ServiceNowIncidentLookupResponse>(
+          "查询新建工单编号",
+          `${host}/api/now/table/incident/${encodeURIComponent(sysId)}?sysparm_fields=sys_id,number&sysparm_display_value=all`,
+          { Authorization: `Bearer ${token}` },
+          host,
+          { suppressErrorLog: true },
+        );
+        const incidentNumber = readServiceNowFieldAsString(incident.result?.number);
+        const incidentSysId = readServiceNowFieldAsString(incident.result?.sys_id);
+
+        if (incidentNumber) {
+          result.display_name = "number";
+          result.display_value = incidentNumber;
+        }
+        if (incidentSysId) {
+          result.sys_id = incidentSysId;
+        }
+      } catch (error) {
+        console.warn("Failed to refresh incident number after import submit.", error);
+      }
+    }
+
+    return res;
+  }
+
   public async submitTicket(userInput: TicketType) {
     console.log("🚀 ~ AppServiceTicket ~ submitTicket ~ userInput:", userInput);
     const client_credentials = await this.getToken();
@@ -190,11 +252,17 @@ export class AppServiceTicket {
       current.sn_host,
     );
 
-    console.log("AppServiceTicket.submitTicket response:", res);
+    const normalizedRes = await this.enrichTicketResponseWithIncidentNumber(
+      res,
+      client_credentials.access_token,
+      current.sn_host!,
+    );
 
-    await this.persistTicketHistory(userInput, res, current.sn_host!);
+    console.log("AppServiceTicket.submitTicket response:", normalizedRes);
 
-    return res;
+    await this.persistTicketHistory(userInput, normalizedRes, current.sn_host!);
+
+    return normalizedRes;
   }
 
   public async submitTicketViaWebSession(userInput: TicketType, auth: WebSessionAuth) {

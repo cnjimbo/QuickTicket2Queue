@@ -10,6 +10,7 @@ import { computed, reactive, ref, toRaw } from "vue";
 
 export const fieldLabels = {
   userName: "工单提交人",
+  requestFor: "Request For",
   title: "工单简要标题",
   content: "工单详细描述",
   queue_val: "队列",
@@ -20,6 +21,7 @@ type ValidationMessages = Record<FieldKey, string>;
 
 const createEmptyValidationMessages = (): ValidationMessages => ({
   userName: "",
+  requestFor: "",
   title: "",
   content: "",
   queue_val: "",
@@ -29,9 +31,10 @@ const requiredFields: FieldKey[] = ["userName", "title", "content"];
 const TICKET_DRAFT_STORAGE_KEY = "quickticket2queue:ticket-draft:v1";
 const HISTORY_COPY_PAYLOAD_KEY = "quickticket2queue:history-copy-payload:v1";
 
-type TicketDraftCache = Pick<TicketType, "title" | "content" | "queue_val">;
+type TicketDraftCache = Pick<TicketType, "requestFor" | "title" | "content" | "queue_val">;
 
 const createEmptyDraft = (): TicketDraftCache => ({
+  requestFor: "",
   title: "",
   content: "",
   queue_val: "",
@@ -43,6 +46,7 @@ export const useTicketStore = defineStore("ticket", () => {
     content: "",
     queue_val: "",
     userName: "",
+    requestFor: "",
   } as TicketType);
   const validationMessages = reactive<ValidationMessages>(
     createEmptyValidationMessages(),
@@ -87,6 +91,7 @@ export const useTicketStore = defineStore("ticket", () => {
   };
 
   const getTicketDraftSnapshot = (): TicketDraftCache => ({
+    requestFor: ticket.requestFor ?? "",
     title: ticket.title ?? "",
     content: ticket.content ?? "",
     queue_val: ticket.queue_val ?? "",
@@ -105,6 +110,9 @@ export const useTicketStore = defineStore("ticket", () => {
     if (typeof fields.userName === "string") {
       ticket.userName = fields.userName;
     }
+    if (typeof fields.requestFor === "string") {
+      ticket.requestFor = fields.requestFor;
+    }
     if (typeof fields.title === "string") {
       ticket.title = fields.title;
     }
@@ -121,6 +129,8 @@ export const useTicketStore = defineStore("ticket", () => {
     historyCopyPayload.value = {
       userName:
         typeof fields.userName === "string" ? fields.userName : undefined,
+      requestFor:
+        typeof fields.requestFor === "string" ? fields.requestFor : undefined,
       title: typeof fields.title === "string" ? fields.title : undefined,
       content: typeof fields.content === "string" ? fields.content : undefined,
       queue_val:
@@ -140,6 +150,7 @@ export const useTicketStore = defineStore("ticket", () => {
 
     ticket.title = draft.title;
     ticket.content = draft.content;
+    ticket.requestFor = draft.requestFor ?? "";
     if (!ticket.queue_val?.trim()) {
       ticket.queue_val = draft.queue_val;
     }
@@ -147,6 +158,7 @@ export const useTicketStore = defineStore("ticket", () => {
 
   const clearTicketDraft = () => {
     const empty = createEmptyDraft();
+    ticket.requestFor = empty.requestFor;
     ticket.title = empty.title;
     ticket.content = empty.content;
     ticket.queue_val = empty.queue_val;

@@ -207,6 +207,25 @@ export class AppServiceHttp {
         return this.request<T>(context, url, options, host);
     }
 
+    public async httpGetWithHeaders<T>(
+        context: string,
+        url: string,
+        headers: Record<string, string>,
+        host?: string,
+        behaviorOptions?: RequestBehaviorOptions,
+    ): Promise<T> {
+        const options: RequestInit = {
+            method: "GET",
+            headers: {
+                Accept: "application/json,text/plain,*/*",
+                Connection: "keep-alive",
+                ...headers,
+            },
+        };
+
+        return this.request<T>(context, url, options, host, behaviorOptions);
+    }
+
     /**
      * 发送 POST JSON 请求
      */

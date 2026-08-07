@@ -3,6 +3,7 @@ export interface TicketType {
   content: string;
   queue_val: string;
   userName?: string;
+  requestFor?: string;
 }
 
 export interface ClientCredential {

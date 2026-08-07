@@ -35,6 +35,7 @@ export function useTicketPage() {
     const queueQuery = useRouteQuery<string | null>('queue', null)
     const fromHistoryCopyQuery = useRouteQuery<string | null>('fromHistoryCopy', null)
     const copyUserNameQuery = useRouteQuery<string | null>('copyUserName', null)
+    const copyRequestForQuery = useRouteQuery<string | null>('copyRequestFor', null)
     const copyTitleQuery = useRouteQuery<string | null>('copyTitle', null)
     const copyContentQuery = useRouteQuery<string | null>('copyContent', null)
     const copyQueueValQuery = useRouteQuery<string | null>('copyQueueVal', null)
@@ -137,12 +138,14 @@ export function useTicketPage() {
             }
 
             const copyUserName = copyUserNameQuery.value?.trim() ?? ''
+            const copyRequestFor = copyRequestForQuery.value?.trim() ?? ''
             const copyTitle = copyTitleQuery.value?.trim() ?? ''
             const copyContent = copyContentQuery.value ?? ''
             const copyQueueVal = copyQueueValQuery.value?.trim() ?? ''
 
             ticketStore.setTicketFieldsWithoutDraft({
                 userName: copyUserName,
+                requestFor: copyRequestFor,
                 title: copyTitle,
                 content: copyContent,
                 queue_val: copyQueueVal,
